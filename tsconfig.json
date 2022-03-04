@@ -6,12 +6,10 @@
     "rootDir": "./src",
     "outDir": "./dist",
 
+    "esModuleInterop": true,
     "jsx": "react-jsx",
     "jsxImportSource": "@emotion/react",
     "lib": ["dom"],
-    "paths": {
-      "three/examples/jsm/libs/dat.gui.module": ["./node_modules/@types/dat.gui"]
-    },
 
     // Additional TypeScript error reporting checks are enabled by default to improve code quality.
     // Enable/disable these checks as necessary to suit your coding preferences or work with

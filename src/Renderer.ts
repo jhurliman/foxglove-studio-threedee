@@ -24,7 +24,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
       this.gl.setSize(size.width, size.height);
       // this.resizeHandler(size);
     });
-    this.input.on("click", (cursorCoords) => {
+    this.input.on("click", (_cursorCoords) => {
       // this.clickHandler(cursorCoords);
     });
 
@@ -62,5 +62,5 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.gl.info.reset();
   };
 
-  frameHandler = (delta: number): void => {};
+  frameHandler = (_delta: number): void => {};
 }

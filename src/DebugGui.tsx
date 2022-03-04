@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { GUI } from "three/examples/jsm/libs/dat.gui.module";
+import { GUI } from "dat.gui";
 
 import { Renderer } from "./Renderer";
 import { useRenderer } from "./RendererContext";
