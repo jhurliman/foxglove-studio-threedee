@@ -1,0 +1,31 @@
+root: true
+
+env:
+  browser: true
+  es2020: true
+  node: false
+
+ignorePatterns:
+  - dist
+
+plugins:
+  - jest
+  - "@emotion"
+
+extends:
+  - plugin:@foxglove/base
+  - plugin:@foxglove/react
+
+overrides:
+  - files: ["*.ts", "*.tsx"]
+    extends:
+      - plugin:@foxglove/typescript
+    parserOptions:
+      project: ./tsconfig.json
+    rules:
+      "@foxglove/no-boolean-parameters": off
+      "@typescript-eslint/restrict-template-expressions": off
+      "@emotion/jsx-import": error
+      "@emotion/no-vanilla": off
+      "@emotion/import-from-emotion": error
+      "@emotion/styled-import": error
