@@ -81,7 +81,7 @@ function ThreeDeePanel({ context }: { context: PanelExtensionContext }): JSX.Ele
 
     // subscribe to some topics, you could do this within other effects, based on input fields, etc
     // Once you subscribe to topics, currentFrame will contain message events from those topics (assuming there are messages).
-    context.subscribe(["/some/topic"]);
+    context.subscribe(["/tf"]);
   }, []);
 
   // invoke the done callback once the render is complete

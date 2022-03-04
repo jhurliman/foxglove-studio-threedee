@@ -1,5 +1,4 @@
 import EventEmitter from "eventemitter3";
-import fastclick from "fastclick";
 import * as THREE from "three";
 import { Key } from "ts-key-enum";
 
@@ -17,14 +16,14 @@ export type InputEvents = {
 
 export class Input extends EventEmitter<InputEvents> {
   readonly canvas: HTMLCanvasElement;
-  windowSize = { width: window.innerWidth, height: window.innerHeight };
+  canvasSize: { width: number; height: number };
   startClientPos?: THREE.Vector2; // clientX / clientY
   cursorCoords = new THREE.Vector2(); // Normalized device coordinates (-1 to +1)
 
   constructor(canvas: HTMLCanvasElement) {
     super();
     this.canvas = canvas;
-    fastclick(canvas);
+    this.canvasSize = { width: canvas.width, height: canvas.height };
 
     window.addEventListener("resize", this.onWindowResize, false);
     document.addEventListener("keydown", this.onKeyDown, false);
@@ -39,9 +38,11 @@ export class Input extends EventEmitter<InputEvents> {
   }
 
   onWindowResize = (event: UIEvent): void => {
-    this.windowSize.width = window.innerWidth;
-    this.windowSize.height = window.innerHeight;
-    this.emit("resize", this.windowSize, event);
+    if (this.canvas.parentElement) {
+      this.canvasSize.width = this.canvas.parentElement.clientWidth;
+      this.canvasSize.height = this.canvas.parentElement.clientHeight;
+      this.emit("resize", this.canvasSize, event);
+    }
   };
 
   onKeyDown = (event: KeyboardEvent): void => {

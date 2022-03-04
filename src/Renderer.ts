@@ -12,6 +12,8 @@ export type RendererEvents = {
 export class Renderer extends EventEmitter<RendererEvents> {
   canvas: HTMLCanvasElement;
   gl: THREE.WebGLRenderer;
+  scene: THREE.Scene;
+  camera: THREE.Camera;
   input: Input;
   lastFrameTime: number;
 
@@ -22,7 +24,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.input.on("resize", (size) => {
       this.gl.setPixelRatio(window.devicePixelRatio);
       this.gl.setSize(size.width, size.height);
-      // this.resizeHandler(size);
     });
     this.input.on("click", (_cursorCoords) => {
       // this.clickHandler(cursorCoords);
@@ -35,15 +36,29 @@ export class Renderer extends EventEmitter<RendererEvents> {
       logarithmicDepthBuffer: true,
     });
     this.gl.info.autoReset = false;
-
     this.gl.setPixelRatio(window.devicePixelRatio);
-    this.gl.setSize(window.innerWidth, window.innerHeight);
+
+    let width = canvas.width;
+    let height = canvas.height;
+    if (canvas.parentElement) {
+      width = canvas.parentElement.clientWidth;
+      height = canvas.parentElement.clientHeight;
+      this.gl.setSize(width, height);
+    }
     // this.gl.toneMapping = THREE.ACESFilmicToneMapping;
     this.gl.autoClear = false;
     // this.gl.shadowMap.enabled = false;
     // this.gl.shadowMap.autoUpdate = false;
     // this.gl.shadowMap.needsUpdate = true;
     // this.gl.shadowMap.type = THREE.VSMShadowMap;
+
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 110);
+    this.camera.position.set(1, 3, 5);
+    this.camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+    const axesHelper = new THREE.AxesHelper(5);
+    this.scene.add(axesHelper);
 
     this.lastFrameTime = performance.now();
     this.animationFrame(this.lastFrameTime);
@@ -62,5 +77,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.gl.info.reset();
   };
 
-  frameHandler = (_delta: number): void => {};
+  frameHandler = (_delta: number): void => {
+    this.gl.clear();
+    this.gl.render(this.scene, this.camera);
+  };
 }

@@ -263,11 +263,6 @@
   resolved "https://registry.yarnpkg.com/@types/estree/-/estree-0.0.47.tgz#d7a51db20f0650efec24cd04994f523d93172ed4"
   integrity sha512-c5ciR06jK8u9BstrmJyO97m+klJrrhCf9u3rLu3DEAJBirxRqSCvDQoYKmxuYwQI5SZChAWu+tq9oVlGRuzPAg==
 
-"@types/fastclick@^1.0.30":
-  version "1.0.30"
-  resolved "https://registry.yarnpkg.com/@types/fastclick/-/fastclick-1.0.30.tgz#17deac6b5ffb0b3709f5049faf24c9dc9b75e08a"
-  integrity sha512-koRHqVkngVb7FjAXWSCEelG9UONKL/NbcqbcSjt3Dw5lnEDXSDjviK7g6Zx9Tn87NFmPu3N0j7UHJUhyI27g+Q==
-
 "@types/glob@^7.1.1":
   version "7.2.0"
   resolved "https://registry.yarnpkg.com/@types/glob/-/glob-7.2.0.tgz#bc1b5bf3aa92f25bd5dd39f35c57361bdce5b2eb"
@@ -1177,11 +1172,6 @@ fast-levenshtein@^2.0.6:
   version "2.0.6"
   resolved "https://registry.yarnpkg.com/fast-levenshtein/-/fast-levenshtein-2.0.6.tgz#3d8a5c66883a16a30ca8643e851f19baa7797917"
   integrity sha1-PYpcZog6FqMMqGQ+hR8Zuqd5eRc=
-
-fastclick@1.0.6:
-  version "1.0.6"
-  resolved "https://registry.yarnpkg.com/fastclick/-/fastclick-1.0.6.tgz#161625b27b1a5806405936bda9a2c1926d06be6a"
-  integrity sha1-FhYlsnsaWAZAWTa9qaLBkm0Gvmo=
 
 fastq@^1.6.0:
   version "1.13.0"
