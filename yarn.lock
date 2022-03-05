@@ -172,6 +172,11 @@
     minimatch "^3.0.4"
     strip-json-comments "^3.1.1"
 
+"@foxglove/avl@^1.0.0":
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/@foxglove/avl/-/avl-1.0.0.tgz#1fbc86fbda1caf1e89efc89bc349e93d1431788d"
+  integrity sha512-5lV6ZzeiCgtTlEOsoxqvBN6B8S91AyOMS68ImUrETSalmFKOM5XO8YhPMWsUW0QR3431CwQhKa2buSCu2TFcfA==
+
 "@foxglove/eslint-plugin@0.19.0":
   version "0.19.0"
   resolved "https://registry.yarnpkg.com/@foxglove/eslint-plugin/-/eslint-plugin-0.19.0.tgz#ad5be6462df5a1e3bb0425e948bea57d82dddcf3"
@@ -1250,6 +1255,11 @@ get-symbol-description@^1.0.0:
   dependencies:
     call-bind "^1.0.2"
     get-intrinsic "^1.1.1"
+
+gl-matrix@^3.4.3:
+  version "3.4.3"
+  resolved "https://registry.yarnpkg.com/gl-matrix/-/gl-matrix-3.4.3.tgz#fc1191e8320009fd4d20e9339595c6041ddc22c9"
+  integrity sha512-wcCp8vu8FT22BnvKVPjXa/ICBWRq/zjFfdofZy1WSpQZpphblv12/bOQLBC1rMM7SGOFS9ltVmKOHil5+Ml7gA==
 
 glob-parent@^5.1.2:
   version "5.1.2"
