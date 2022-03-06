@@ -46,6 +46,7 @@ export function ThreeDeePanel({ context }: { context: PanelExtensionContext }): 
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const renderer = useMemo(() => (canvas ? new Renderer(canvas) : null), [canvas]);
 
+  const [colorScheme, setColorScheme] = useState<"dark" | "light" | undefined>();
   const [topics, setTopics] = useState<ReadonlyArray<Topic> | undefined>();
   const [messages, setMessages] = useState<ReadonlyArray<MessageEvent<unknown>> | undefined>();
   const [currentTime, setCurrentTime] = useState<bigint | undefined>();
@@ -75,11 +76,14 @@ export function ThreeDeePanel({ context }: { context: PanelExtensionContext }): 
       // Your panel will not receive another render callback until _done_ is called from a prior render. If your panel is not done
       // rendering before the next render call, studio shows a notification to the user that your panel is delayed.
       //
-      // Set the done callback into a state variable to trigger a re-render.
+      // Set the done callback into a state variable to trigger a re-render
       setRenderDone(done);
 
+      // Keep UI elements and the renderer aware of the current color scheme
+      setColorScheme(renderState.colorScheme);
+
       // We may have new topics - since we are also watching for messages in the current frame, topics may not have changed
-      // It is up to you to determine the correct action when state has not changed.
+      // It is up to you to determine the correct action when state has not changed
       setTopics(renderState.topics);
 
       // currentFrame has messages on subscribed topics since the last render call
@@ -136,6 +140,12 @@ export function ThreeDeePanel({ context }: { context: PanelExtensionContext }): 
       renderer.currentTime = currentTime;
     }
   }, [currentTime, renderer]);
+
+  useEffect(() => {
+    if (colorScheme && renderer) {
+      renderer.setColorScheme(colorScheme);
+    }
+  }, [colorScheme, renderer]);
 
   // Handle messages
   useEffect(() => {

@@ -33,6 +33,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
   constructor(canvas: HTMLCanvasElement) {
     super();
 
+    // NOTE: Global side effect
+    THREE.Object3D.DefaultUp = new THREE.Vector3(0, 0, 1);
+
     this.canvas = canvas;
     this.gl = new THREE.WebGLRenderer({
       canvas,
@@ -40,6 +43,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
       antialias: true,
       logarithmicDepthBuffer: true,
     });
+    this.gl.autoClear = false;
     this.gl.info.autoReset = false;
     this.gl.setPixelRatio(window.devicePixelRatio);
 
@@ -67,7 +71,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
     const near = 0.001; // 1mm
     const far = 10_000; // 10km
     this.camera = new THREE.PerspectiveCamera(fov, width / height, near, far);
-    this.camera.position.set(1, 3, 5);
+    this.camera.up.set(0, 0, 1);
+    this.camera.position.set(1, -3, 1);
     this.camera.lookAt(new THREE.Vector3(0, 0, 0));
 
     this.controls = new OrbitControls(this.camera, this.gl.domElement);
@@ -75,6 +80,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.transformTree = new TransformTree();
 
     this.animationFrame(performance.now());
+  }
+
+  setColorScheme(colorScheme: "dark" | "light"): void {
+    console.info(`[Renderer] Setting color scheme to "${colorScheme}"`);
+    this.gl.setClearColor(colorScheme === "dark" ? 0x181818 : 0xe9eaee, 1);
   }
 
   addTransformMessage(tf: TF): void {

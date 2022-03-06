@@ -53,6 +53,7 @@ export const BasicRender: ComponentStory<typeof ThreeDeePanel> = () => {
           sizeInBytes: 0,
         },
       ],
+      colorScheme: "light",
     };
     const renderDone = () => {
       console.log(`Render done`);
