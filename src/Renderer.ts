@@ -3,9 +3,10 @@ import EventEmitter from "eventemitter3";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 import { Input, Size } from "./Input";
-import { TF, Transform, TransformTree } from "./transforms";
+import { Transform, TransformTree } from "./transforms";
 import { makePose, Pose } from "./transforms/geometry";
-import { mat4 } from "gl-matrix";
+import { ColorRGBA, Marker, MarkerType, TF } from "./ros";
+import { rosTimeToNanoSec } from "./transforms/time";
 
 export type RendererEvents = {
   startFrame: (currentTime: bigint, renderer: Renderer) => void;
@@ -14,9 +15,28 @@ export type RendererEvents = {
   transformTreeUpdated: (renderer: Renderer) => void;
 };
 
+type CoordinateFrameRenderable = THREE.Object3D & {
+  userData: {
+    frameId?: string;
+    type?: string;
+    selectable?: boolean;
+    pose?: Pose;
+  };
+};
+
+type MarkerRenderable = THREE.Object3D & {
+  userData: {
+    topic?: string;
+    marker?: Marker;
+    srcTime?: bigint;
+    pose?: Pose;
+    mesh?: THREE.Mesh;
+  };
+};
+
 const IDENTITY_POSE = makePose();
 
-const tempTransform = new Transform([0, 0, 0], [0, 0, 0, 1]);
+const tempPose = makePose();
 
 export class Renderer extends EventEmitter<RendererEvents> {
   canvas: HTMLCanvasElement;
@@ -28,7 +48,10 @@ export class Renderer extends EventEmitter<RendererEvents> {
   transformTree: TransformTree;
   currentTime: bigint | undefined;
 
-  coordinateFrameRenderables = new Map<string, THREE.Object3D>();
+  coordinateFrameRenderables = new Map<string, CoordinateFrameRenderable>();
+  markerRenderables = new Map<string, MarkerRenderable>();
+
+  cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
 
   constructor(canvas: HTMLCanvasElement) {
     super();
@@ -43,6 +66,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
       antialias: true,
       logarithmicDepthBuffer: true,
     });
+    this.gl.outputEncoding = THREE.sRGBEncoding;
     this.gl.autoClear = false;
     this.gl.info.autoReset = false;
     this.gl.setPixelRatio(window.devicePixelRatio);
@@ -98,7 +122,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
       frameAdded = true;
     }
 
-    this.transformTree.addTransformMessage(tf);
+    const stamp = rosTimeToNanoSec(tf.header.stamp);
+    const t = tf.transform.translation;
+    const q = tf.transform.rotation;
+    const transform = new Transform([t.x, t.y, t.z], [q.x, q.y, q.z, q.w]);
+    this.transformTree.addTransform(tf.child_frame_id, tf.header.frame_id, stamp, transform);
 
     if (frameAdded) {
       console.info(`[Renderer] Added transform "${tf.header.frame_id}_T_${tf.child_frame_id}"`);
@@ -106,10 +134,38 @@ export class Renderer extends EventEmitter<RendererEvents> {
     }
   }
 
+  addMarkerMessage(topic: string, marker: Marker): void {
+    const markerId = `${topic}:${marker.ns}:${marker.id}`;
+
+    let renderable = this.markerRenderables.get(markerId);
+    if (!renderable) {
+      renderable = new THREE.Object3D() as MarkerRenderable;
+      renderable.name = markerId;
+      renderable.userData.topic = topic;
+      renderable.userData.marker = marker;
+      renderable.userData.srcTime = rosTimeToNanoSec(marker.header.stamp);
+      renderable.userData.pose = makePose();
+
+      this.scene.add(renderable);
+      this.markerRenderables.set(markerId, renderable);
+    }
+
+    this.updateMarkerRenderable(renderable, topic, marker);
+  }
+
+  removeMarkerMessage(topic: string, ns: string, id: number): void {
+    const markerId = `${topic}:${ns}:${id}`;
+    const renderable = this.markerRenderables.get(markerId);
+    if (renderable) {
+      this.scene.remove(renderable);
+      this.markerRenderables.delete(markerId);
+    }
+  }
+
   addCoordinateFrameRenderable(frameId: string): void {
     if (this.coordinateFrameRenderables.has(frameId)) return;
 
-    const frame = new THREE.Object3D();
+    const frame = new THREE.Object3D() as CoordinateFrameRenderable;
     frame.name = frameId;
     frame.userData.frameId = frameId;
     frame.userData.type = "CoordinateFrame";
@@ -124,6 +180,26 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
     this.scene.add(frame);
     this.coordinateFrameRenderables.set(frameId, frame);
+  }
+
+  updateMarkerRenderable(renderable: MarkerRenderable, topic: string, marker: Marker): void {
+    renderable.userData.topic = topic;
+    renderable.userData.marker = marker;
+    renderable.userData.pose = marker.pose;
+
+    renderable.children.length = 0;
+
+    switch (marker.type) {
+      case MarkerType.CUBE:
+        const material = new THREE.MeshBasicMaterial();
+        setMaterialColor(material, marker.color);
+        const cube = new THREE.Mesh(this.cubeGeometry, material);
+        cube.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
+        renderable.add(cube);
+        break;
+      default:
+        console.warn(`[Renderer] Unsupported marker type: ${marker.type}`);
+    }
   }
 
   // Callback handlers
@@ -146,27 +222,30 @@ export class Renderer extends EventEmitter<RendererEvents> {
       const renderFrameId = fixedFrameId;
 
       for (const [frameId, renderable] of this.coordinateFrameRenderables.entries()) {
-        const pose = renderable.userData.pose as Pose;
-        const poseApplied = Boolean(
-          this.transformTree.apply(
-            pose,
-            IDENTITY_POSE,
-            renderFrameId,
-            fixedFrameId,
-            frameId,
-            currentTime,
-            currentTime,
-          ),
+        updatePose(
+          renderable,
+          this.transformTree,
+          renderFrameId,
+          fixedFrameId,
+          frameId,
+          currentTime,
+          currentTime,
         );
-        renderable.visible = poseApplied;
-        if (poseApplied) {
-          tempTransform.setPose(pose);
-          const p = tempTransform.position();
-          const q = tempTransform.rotation();
-          renderable.position.set(p[0], p[1], p[2]);
-          renderable.quaternion.set(q[0], q[1], q[2], q[3]);
-          renderable.updateMatrix();
-        }
+      }
+
+      for (const renderable of this.markerRenderables.values()) {
+        const marker = renderable.userData.marker!;
+        const frameId = marker.header.frame_id;
+        const srcTime = marker.frame_locked ? currentTime : renderable.userData.srcTime!;
+        updatePose(
+          renderable,
+          this.transformTree,
+          renderFrameId,
+          fixedFrameId,
+          frameId,
+          currentTime,
+          srcTime,
+        );
       }
     }
 
@@ -189,4 +268,46 @@ export class Renderer extends EventEmitter<RendererEvents> {
   clickHandler = (_cursorCoords: THREE.Vector2): void => {
     //
   };
+}
+
+function setMaterialColor(
+  output: THREE.MeshBasicMaterial | THREE.MeshStandardMaterial,
+  color: Readonly<ColorRGBA>,
+): void {
+  output.color.r = color.r;
+  output.color.g = color.g;
+  output.color.b = color.b;
+  output.color.convertSRGBToLinear();
+  output.opacity = color.a;
+}
+
+function updatePose(
+  renderable: THREE.Object3D,
+  transformTree: TransformTree,
+  renderFrameId: string,
+  fixedFrameId: string,
+  srcFrameId: string,
+  dstTime: bigint,
+  srcTime: bigint,
+): void {
+  const pose = renderable.userData.pose as Pose;
+  const poseApplied = Boolean(
+    transformTree.apply(
+      tempPose,
+      pose,
+      renderFrameId,
+      fixedFrameId,
+      srcFrameId,
+      dstTime,
+      srcTime,
+    ),
+  );
+  renderable.visible = poseApplied;
+  if (poseApplied) {
+    const p = tempPose.position;
+    const q = tempPose.orientation;
+    renderable.position.set(p.x, p.y, p.z);
+    renderable.quaternion.set(q.x, q.y, q.z, q.w);
+    renderable.updateMatrix();
+  }
 }

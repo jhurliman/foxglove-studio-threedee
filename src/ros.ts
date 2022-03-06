@@ -1,9 +1,102 @@
+export enum MarkerType {
+  ARROW = 0,
+  CUBE = 1,
+  SPHERE = 2,
+  CYLINDER = 3,
+  LINE_STRIP = 4,
+  LINE_LIST = 5,
+  CUBE_LIST = 6,
+  SPHERE_LIST = 7,
+  POINTS = 8,
+  TEXT_VIEW_FACING = 9,
+  MESH_RESOURCE = 10,
+  TRIANGLE_LIST = 11,
+}
+
+export enum MarkerAction {
+  ADD = 0,
+  MODIFY = 0,
+  DELETE = 2,
+  DELETEALL = 3,
+}
+
+export type RosTime = {
+  sec: number;
+  nsec: number;
+};
+
+export type RosDuration = RosTime;
+
+export type Vector3 = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type Quaternion = {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+};
+
+export type ColorRGBA = {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+};
+
+export type Pose = {
+  position: Vector3;
+  orientation: Quaternion;
+};
+
+export type Header = {
+  frame_id: string;
+  stamp: RosTime;
+  seq?: number;
+};
+
+export type TF = {
+  header: Header;
+  child_frame_id: string;
+  transform: {
+    rotation: Quaternion;
+    translation: Vector3;
+  };
+};
+
+export type Marker = {
+  header: Header;
+  ns: string;
+  id: number;
+  type: number;
+  action: number;
+  pose: Pose;
+  scale: Vector3;
+  color: ColorRGBA;
+  lifetime: RosDuration;
+  frame_locked: boolean;
+  points: Vector3[];
+  colors: ColorRGBA[];
+  text: string;
+  mesh_resource: string;
+  mesh_use_embedded_materials: boolean;
+};
+
 export const TRANSFORM_STAMPED_DATATYPES = new Set<string>();
 addRosDataType(TRANSFORM_STAMPED_DATATYPES, "geometry_msgs/TransformStamped");
 
 export const TF_DATATYPES = new Set<string>();
 addRosDataType(TF_DATATYPES, "tf/tfMessage");
 addRosDataType(TF_DATATYPES, "tf2_msgs/TFMessage");
+
+export const MARKER_DATATYPES = new Set<string>();
+addRosDataType(MARKER_DATATYPES, "visualization_msgs/Marker");
+
+export const MARKER_ARRAY_DATATYPES = new Set<string>();
+addRosDataType(MARKER_ARRAY_DATATYPES, "visualization_msgs/MarkerArray");
 
 // Expand a single ROS1 dataType into variations for ROS2 and protobufs,
 // then add them to the given output set

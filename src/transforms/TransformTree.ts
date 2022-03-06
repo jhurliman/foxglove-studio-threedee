@@ -1,20 +1,7 @@
 import { Duration, Time } from "./time";
-import { Orientation, Point, Pose } from "./geometry";
+import { Pose } from "./geometry";
 import { CoordinateFrame } from "./CoordinateFrame";
 import { Transform } from "./Transform";
-
-export type TF = {
-  header: {
-    frame_id: string;
-    stamp: { sec: number; nsec: number };
-    seq: number;
-  };
-  child_frame_id: string;
-  transform: {
-    rotation: Orientation;
-    translation: Point;
-  };
-};
 
 /**
  * TransformTree is a collection of coordinate frames with convenience methods
@@ -33,14 +20,6 @@ export class TransformTree {
     }
 
     frame.addTransform(time, transform);
-  }
-
-  addTransformMessage(tf: TF): void {
-    const stamp = BigInt(tf.header.stamp.sec) * BigInt(1e9) + BigInt(tf.header.stamp.nsec);
-    const t = tf.transform.translation;
-    const q = tf.transform.rotation;
-    const transform = new Transform([t.x, t.y, t.z], [q.x, q.y, q.z, q.w]);
-    this.addTransform(tf.child_frame_id, tf.header.frame_id, stamp, transform);
   }
 
   hasFrame(id: string): boolean {

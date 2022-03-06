@@ -1,5 +1,5 @@
 /** @jsxImportSource @emotion/react */
-import { jsx } from '@emotion/react';
+import { jsx } from "@emotion/react";
 
 import { PanelExtensionContext, RenderState, Topic, MessageEvent } from "@foxglove/studio";
 import React from "react";
@@ -9,8 +9,14 @@ import { DebugGui } from "./DebugGui";
 import { Renderer } from "./Renderer";
 import { RendererContext, useRendererEvent } from "./RendererContext";
 import { Stats } from "./Stats";
-import { TRANSFORM_STAMPED_DATATYPES, TF_DATATYPES } from "./ros";
-import { TF } from "./transforms";
+import {
+  TRANSFORM_STAMPED_DATATYPES,
+  TF_DATATYPES,
+  MARKER_DATATYPES,
+  MARKER_ARRAY_DATATYPES,
+  TF,
+  Marker,
+} from "./ros";
 import { rosTimeToNanoSec } from "./transforms/time";
 
 const SHOW_STATS = true;
@@ -118,9 +124,14 @@ export function ThreeDeePanel({ context }: { context: PanelExtensionContext }): 
       return EMPTY_LIST;
     }
 
-    // Subscribe to all transform topics
     for (const topic of topics) {
+      // Subscribe to all transform topics
       if (TF_DATATYPES.has(topic.datatype) || TRANSFORM_STAMPED_DATATYPES.has(topic.datatype)) {
+        subscriptionList.push(topic.name);
+      }
+
+      // TODO: Allow disabling of subscriptions to other topics
+      if (MARKER_DATATYPES.has(topic.datatype) || MARKER_ARRAY_DATATYPES.has(topic.datatype)) {
         subscriptionList.push(topic.name);
       }
     }
@@ -165,6 +176,16 @@ export function ThreeDeePanel({ context }: { context: PanelExtensionContext }): 
         // geometry_msgs/TransformStamped - Ingest this single transform into our TF tree
         const tf = message.message as TF;
         renderer.addTransformMessage(tf);
+      } else if (MARKER_ARRAY_DATATYPES.has(datatype)) {
+        // visualization_msgs/MarkerArray - Ingest the list of markers
+        const markerArray = message.message as { markers: Marker[] };
+        for (const marker of markerArray.markers) {
+          renderer.addMarkerMessage(message.topic, marker);
+        }
+      } else if (MARKER_DATATYPES.has(datatype)) {
+        // visualization_msgs/Marker - Ingest this single marker
+        const marker = message.message as Marker;
+        renderer.addMarkerMessage(message.topic, marker);
       }
     }
   }, [messages, topicsToDatatypes]);
