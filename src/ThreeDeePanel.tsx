@@ -64,7 +64,7 @@ function ThreeDeePanel({ context }: { context: PanelExtensionContext }): JSX.Ele
       // <https://github.com/foxglove/studio/issues/1248> is implemented
       if (renderState.currentFrame) {
         const latest = getCurrentTime(renderState.currentFrame);
-        if (latest) {
+        if (latest != undefined) {
           setCurrentTime(latest);
         }
       }
@@ -130,7 +130,7 @@ function ThreeDeePanel({ context }: { context: PanelExtensionContext }): JSX.Ele
 
   // Keep the renderer currentTime up to date
   useEffect(() => {
-    if (renderer && currentTime) {
+    if (renderer && currentTime != undefined) {
       renderer.currentTime = currentTime;
     }
   }, [currentTime, renderer]);
