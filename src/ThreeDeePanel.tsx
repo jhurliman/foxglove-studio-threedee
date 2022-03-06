@@ -1,3 +1,6 @@
+/** @jsxImportSource @emotion/react */
+import { jsx } from '@emotion/react';
+
 import { PanelExtensionContext, RenderState, Topic, MessageEvent } from "@foxglove/studio";
 import React from "react";
 import { useLayoutEffect, useEffect, useState, useMemo } from "react";
@@ -40,7 +43,7 @@ function RendererOverlay(): JSX.Element {
   );
 }
 
-function ThreeDeePanel({ context }: { context: PanelExtensionContext }): JSX.Element {
+export function ThreeDeePanel({ context }: { context: PanelExtensionContext }): JSX.Element {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const renderer = useMemo(() => (canvas ? new Renderer(canvas) : null), [canvas]);
 
@@ -166,8 +169,6 @@ function ThreeDeePanel({ context }: { context: PanelExtensionContext }): JSX.Ele
     <React.Fragment>
       <canvas ref={setCanvas} />
       <RendererContext.Provider value={renderer}>
-        <div>{topics?.join(",")}</div>
-        <div>{messages?.length}</div>
         <RendererOverlay />
       </RendererContext.Provider>
     </React.Fragment>

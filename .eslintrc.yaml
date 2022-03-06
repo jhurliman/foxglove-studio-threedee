@@ -15,6 +15,7 @@ plugins:
 extends:
   - plugin:@foxglove/base
   - plugin:@foxglove/react
+  - plugin:storybook/recommended
 
 overrides:
   - files: ["*.ts", "*.tsx"]

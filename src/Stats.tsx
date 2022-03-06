@@ -1,5 +1,3 @@
-/** @jsx jsx */
-import { jsx } from "@emotion/react";
 import { useEffect, useState } from "react";
 import THREEStats from "three/examples/jsm/libs/stats.module";
 
