@@ -23,7 +23,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
   gl: THREE.WebGLRenderer;
   scene: THREE.Scene;
   input: Input;
-  camera: THREE.Camera;
+  camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
   transformTree: TransformTree;
   currentTime: bigint | undefined;
@@ -169,6 +169,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
   };
 
   resizeHandler = (size: Size): void => {
+    this.camera.aspect = size.width / size.height;
+    this.camera.updateProjectionMatrix();
+
     this.gl.setPixelRatio(window.devicePixelRatio);
     this.gl.setSize(size.width, size.height);
   };

@@ -59,5 +59,9 @@ export const BasicRender: ComponentStory<typeof ThreeDeePanel> = () => {
     };
     context.onRender!(renderState, renderDone);
   }, 100);
-  return <ThreeDeePanel context={context} />;
+  return (
+    <div style={{ width: "100%", height: "100%", top: 0, left: 0, position: "absolute" }}>
+      <ThreeDeePanel context={context} />
+    </div>
+  );
 };

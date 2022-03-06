@@ -19,7 +19,7 @@ const SHOW_DEBUG = false;
 const EMPTY_LIST: string[] = [];
 
 function RendererOverlay(): JSX.Element {
-  const [selectedRenderable, setSelectedRenderable] = useState<THREE.Object3D | null>(null);
+  const [_selectedRenderable, setSelectedRenderable] = useState<THREE.Object3D | null>(null);
   useRendererEvent("renderableSelected", (renderable) => setSelectedRenderable(renderable));
 
   const stats = SHOW_STATS ? (
@@ -38,7 +38,6 @@ function RendererOverlay(): JSX.Element {
     <React.Fragment>
       {stats}
       {debug}
-      {selectedRenderable?.name ?? "no selected renderable"}
     </React.Fragment>
   );
 }
@@ -167,7 +166,7 @@ export function ThreeDeePanel({ context }: { context: PanelExtensionContext }): 
 
   return (
     <React.Fragment>
-      <canvas ref={setCanvas} />
+      <canvas ref={setCanvas} css={{ position: "absolute", top: 0 }} />
       <RendererContext.Provider value={renderer}>
         <RendererOverlay />
       </RendererContext.Provider>

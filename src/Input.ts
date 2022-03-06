@@ -7,7 +7,7 @@ const MAX_DIST = 1;
 export type Size = { width: number; height: number };
 
 export type InputEvents = {
-  resize: (windowSize: Size, event: UIEvent) => void;
+  resize: (windowSize: Size) => void;
   click: (cursorCoords: THREE.Vector2, event: MouseEvent) => void;
   mousedown: (cursorCoords: THREE.Vector2, event: MouseEvent) => void;
   mousemove: (cursorCoords: THREE.Vector2, event: MouseEvent) => void;
@@ -17,15 +17,24 @@ export type InputEvents = {
 export class Input extends EventEmitter<InputEvents> {
   readonly canvas: HTMLCanvasElement;
   canvasSize: { width: number; height: number };
+  resizeObserver: ResizeObserver;
   startClientPos?: THREE.Vector2; // clientX / clientY
   cursorCoords = new THREE.Vector2(); // Normalized device coordinates (-1 to +1)
 
   constructor(canvas: HTMLCanvasElement) {
     super();
+
+    const parentEl = canvas.parentElement;
+    if (!parentEl) {
+      throw new Error("<canvas> must be parented to a DOM element");
+    }
+
     this.canvas = canvas;
     this.canvasSize = { width: canvas.width, height: canvas.height };
 
-    window.addEventListener("resize", this.onWindowResize, false);
+    this.resizeObserver = new ResizeObserver(this.onResize);
+    this.resizeObserver.observe(parentEl);
+
     document.addEventListener("keydown", this.onKeyDown, false);
     canvas.addEventListener("mousedown", this.onMouseDown, false);
     canvas.addEventListener("mousemove", this.onMouseMove, false);
@@ -37,11 +46,14 @@ export class Input extends EventEmitter<InputEvents> {
     canvas.addEventListener("touchendoutside", this.onTouchEndOutside);
   }
 
-  onWindowResize = (event: UIEvent): void => {
+  onResize = (_entries: ResizeObserverEntry[]) => {
     if (this.canvas.parentElement) {
-      this.canvasSize.width = this.canvas.parentElement.clientWidth;
-      this.canvasSize.height = this.canvas.parentElement.clientHeight;
-      this.emit("resize", this.canvasSize, event);
+      const newSize = innerSize(this.canvas.parentElement);
+      if (newSize.width !== this.canvasSize.width || newSize.height !== this.canvasSize.height) {
+        this.canvasSize.width = newSize.width;
+        this.canvasSize.height = newSize.height;
+        this.emit("resize", this.canvasSize);
+      }
     }
   };
 
@@ -106,4 +118,19 @@ export class Input extends EventEmitter<InputEvents> {
     this.cursorCoords.x = (event.clientX / window.innerWidth) * 2 - 1;
     this.cursorCoords.y = -(event.clientY / window.innerHeight) * 2 + 1;
   }
+}
+
+function innerSize(node: HTMLElement) {
+  const cs = getComputedStyle(node);
+
+  const paddingX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+  const paddingY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+
+  const borderX = parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+  const borderY = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+
+  const width = node.clientWidth - paddingX - borderX;
+  const height = node.clientHeight - paddingY - borderY;
+  
+  return { width, height };
 }
