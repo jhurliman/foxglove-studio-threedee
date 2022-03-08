@@ -42,32 +42,23 @@ export const BasicRender: ComponentStory<typeof ThreeDeePanel> = () => {
         },
       ],
     };
+    const marker0 = createMarker();
+    marker0.pose.position.z = -0.2;
+    marker0.pose.orientation.z = 0.383;
+    marker0.pose.orientation.w = 0.924;
+    marker0.scale.z = 0.1;
+    marker0.color = { r: 111 / 255, g: 59 / 255, b: 232 / 255, a: 1 };
+
+    const marker1 = createMarker();
+    marker1.id = 1;
+    marker1.type = MarkerType.CYLINDER;
+    marker1.text = "Cylinder";
+    marker1.pose.position.z = 0.1;
+    marker1.scale = { x: 0.5, y: 0.5, z: 0.5 };
+    marker1.color = { r: 1, g: 0, b: 0, a: 1 };
+
     const markers: { markers: Marker[] } = {
-      markers: [
-        {
-          header: {
-            stamp: { sec: 0, nsec: 0 },
-            frame_id: "base_link",
-          },
-          ns: "",
-          id: 0,
-          type: MarkerType.CUBE,
-          action: MarkerAction.ADD,
-          pose: {
-            position: { x: 0, y: 0, z: -0.2 },
-            orientation: { x: 0, y: 0, z: 0.383, w: 0.924 },
-          },
-          scale: { x: 1, y: 1, z: 0.1 },
-          color: { r: 111 / 255, g: 59 / 255, b: 232 / 255, a: 1 },
-          lifetime: { sec: 0, nsec: 0 },
-          frame_locked: false,
-          points: [],
-          colors: [],
-          text: "",
-          mesh_resource: "",
-          mesh_use_embedded_materials: false,
-        },
-      ]
+      markers: [marker0, marker1],
     };
     const renderState: RenderState = {
       topics: [
@@ -101,3 +92,29 @@ export const BasicRender: ComponentStory<typeof ThreeDeePanel> = () => {
     </div>
   );
 };
+
+function createMarker(): Marker {
+  return {
+    header: {
+      stamp: { sec: 0, nsec: 0 },
+      frame_id: "base_link",
+    },
+    ns: "",
+    id: 0,
+    type: MarkerType.CUBE,
+    action: MarkerAction.ADD,
+    pose: {
+      position: { x: 0, y: 0, z: 0 },
+      orientation: { x: 0, y: 0, z: 0, w: 1 },
+    },
+    scale: { x: 1, y: 1, z: 1 },
+    color: { r: 1, g: 1, b: 1, a: 1 },
+    lifetime: { sec: 0, nsec: 0 },
+    frame_locked: false,
+    points: [],
+    colors: [],
+    text: "",
+    mesh_resource: "",
+    mesh_use_embedded_materials: false,
+  };
+}

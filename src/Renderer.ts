@@ -13,6 +13,8 @@ export type RendererEvents = {
   endFrame: (currentTime: bigint, renderer: Renderer) => void;
   renderableSelected: (renderable: THREE.Object3D, renderer: Renderer) => void;
   transformTreeUpdated: (renderer: Renderer) => void;
+  showLabel: (labelId: string, labelMarker: Marker, renderer: Renderer) => void;
+  removeLabel: (labelId: string, renderer: Renderer) => void;
 };
 
 type CoordinateFrameRenderable = THREE.Object3D & {
@@ -34,14 +36,19 @@ type MarkerRenderable = THREE.Object3D & {
   };
 };
 
-const IDENTITY_POSE = makePose();
+// NOTE: These do not use .convertSRGBToLinear() since background color is not
+// affected by gamma correction
+const LIGHT_BACKDROP = new THREE.Color(0xececec);
+const DARK_BACKDROP = new THREE.Color(0x121217);
 
+const tempVec = new THREE.Vector3();
 const tempPose = makePose();
 
 export class Renderer extends EventEmitter<RendererEvents> {
   canvas: HTMLCanvasElement;
   gl: THREE.WebGLRenderer;
   scene: THREE.Scene;
+  dirLight: THREE.DirectionalLight;
   input: Input;
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
@@ -51,10 +58,15 @@ export class Renderer extends EventEmitter<RendererEvents> {
   coordinateFrameRenderables = new Map<string, CoordinateFrameRenderable>();
   markerRenderables = new Map<string, MarkerRenderable>();
 
-  cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+  boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+  sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+  cylinderGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
 
   constructor(canvas: HTMLCanvasElement) {
     super();
+
+    // Make the cylinder geometry stand upright
+    this.cylinderGeometry.rotateX(Math.PI / 2);
 
     // NOTE: Global side effect
     THREE.Object3D.DefaultUp = new THREE.Vector3(0, 0, 1);
@@ -66,9 +78,14 @@ export class Renderer extends EventEmitter<RendererEvents> {
       antialias: true,
       logarithmicDepthBuffer: true,
     });
+    if (!this.gl.capabilities.isWebGL2) {
+      throw new Error("WebGL2 is not supported");
+    }
     this.gl.outputEncoding = THREE.sRGBEncoding;
     this.gl.autoClear = false;
     this.gl.info.autoReset = false;
+    this.gl.shadowMap.enabled = true;
+    this.gl.shadowMap.type = THREE.VSMShadowMap;
     this.gl.setPixelRatio(window.devicePixelRatio);
 
     let width = canvas.width;
@@ -78,21 +95,30 @@ export class Renderer extends EventEmitter<RendererEvents> {
       height = canvas.parentElement.clientHeight;
       this.gl.setSize(width, height);
     }
-    // this.gl.toneMapping = THREE.ACESFilmicToneMapping;
+    this.gl.toneMapping = THREE.NoToneMapping;
+    this.gl.outputEncoding = THREE.sRGBEncoding;
     this.gl.autoClear = false;
-    // this.gl.shadowMap.enabled = false;
-    // this.gl.shadowMap.autoUpdate = false;
-    // this.gl.shadowMap.needsUpdate = true;
-    // this.gl.shadowMap.type = THREE.VSMShadowMap;
 
     this.scene = new THREE.Scene();
+
+    this.dirLight = new THREE.DirectionalLight();
+    this.dirLight.position.set(1, 1, 1);
+    this.dirLight.castShadow = true;
+
+    this.dirLight.shadow.mapSize.width = 2048;
+    this.dirLight.shadow.mapSize.height = 2048;
+    this.dirLight.shadow.camera.near = 0.5;
+    this.dirLight.shadow.camera.far = 500;
+
+    this.scene.add(this.dirLight);
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0xffffff, 0.5));
 
     this.input = new Input(canvas);
     this.input.on("resize", (size) => this.resizeHandler(size));
     this.input.on("click", (cursorCoords) => this.clickHandler(cursorCoords));
 
     const fov = 50;
-    const near = 0.001; // 1mm
+    const near = 0.01; // 1cm
     const far = 10_000; // 10km
     this.camera = new THREE.PerspectiveCamera(fov, width / height, near, far);
     this.camera.up.set(0, 0, 1);
@@ -108,7 +134,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   setColorScheme(colorScheme: "dark" | "light"): void {
     console.info(`[Renderer] Setting color scheme to "${colorScheme}"`);
-    this.gl.setClearColor(colorScheme === "dark" ? 0x181818 : 0xe9eaee, 1);
+    this.gl.setClearColor(colorScheme === "dark" ? DARK_BACKDROP : LIGHT_BACKDROP, 1);
   }
 
   addTransformMessage(tf: TF): void {
@@ -135,7 +161,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
   }
 
   addMarkerMessage(topic: string, marker: Marker): void {
-    const markerId = `${topic}:${marker.ns}:${marker.id}`;
+    const markerId = getMarkerIdForMarker(topic, marker);
 
     let renderable = this.markerRenderables.get(markerId);
     if (!renderable) {
@@ -154,12 +180,21 @@ export class Renderer extends EventEmitter<RendererEvents> {
   }
 
   removeMarkerMessage(topic: string, ns: string, id: number): void {
-    const markerId = `${topic}:${ns}:${id}`;
+    const markerId = getMarkerId(topic, ns, id);
     const renderable = this.markerRenderables.get(markerId);
     if (renderable) {
       this.scene.remove(renderable);
       this.markerRenderables.delete(markerId);
     }
+  }
+
+  markerWorldPosition(markerId: string): Readonly<THREE.Vector3> | undefined {
+    const renderable = this.markerRenderables.get(markerId);
+    if (!renderable) return undefined;
+
+    tempVec.set(0, 0, 0);
+    tempVec.applyMatrix4(renderable.matrixWorld);
+    return tempVec;
   }
 
   addCoordinateFrameRenderable(frameId: string): void {
@@ -190,12 +225,59 @@ export class Renderer extends EventEmitter<RendererEvents> {
     renderable.children.length = 0;
 
     switch (marker.type) {
-      case MarkerType.CUBE:
-        const material = new THREE.MeshBasicMaterial();
+      case MarkerType.CUBE: {
+        const material = new THREE.MeshStandardMaterial({ dithering: true });
         setMaterialColor(material, marker.color);
-        const cube = new THREE.Mesh(this.cubeGeometry, material);
+        const cube = new THREE.Mesh(this.boxGeometry, material);
+        cube.castShadow = true;
+        cube.receiveShadow = true;
         cube.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
+
+        const edges = new THREE.EdgesGeometry(this.boxGeometry, 40);
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const line = new THREE.LineSegments(edges, lineMaterial);
+        line.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
+        renderable.add(line);
+
         renderable.add(cube);
+        break;
+      }
+      case MarkerType.SPHERE: {
+        const material = new THREE.MeshStandardMaterial({ dithering: true });
+        setMaterialColor(material, marker.color);
+        const sphere = new THREE.Mesh(this.sphereGeometry, material);
+        sphere.castShadow = true;
+        sphere.receiveShadow = true;
+        sphere.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
+
+        const edges = new THREE.EdgesGeometry(this.sphereGeometry, 40);
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const line = new THREE.LineSegments(edges, lineMaterial);
+        line.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
+        renderable.add(line);
+
+        renderable.add(sphere);
+        break;
+      }
+      case MarkerType.CYLINDER: {
+        const material = new THREE.MeshStandardMaterial({ dithering: true });
+        setMaterialColor(material, marker.color);
+        const cylinder = new THREE.Mesh(this.cylinderGeometry, material);
+        cylinder.castShadow = true;
+        cylinder.receiveShadow = true;
+        cylinder.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
+
+        const edges = new THREE.EdgesGeometry(this.cylinderGeometry, 40);
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const line = new THREE.LineSegments(edges, lineMaterial);
+        line.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
+        renderable.add(line);
+
+        renderable.add(cylinder);
+        break;
+      }
+      case MarkerType.TEXT_VIEW_FACING:
+        // Labels are created as <div> elements
         break;
       default:
         console.warn(`[Renderer] Unsupported marker type: ${marker.type}`);
@@ -234,6 +316,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
       }
 
       for (const renderable of this.markerRenderables.values()) {
+        const topic = renderable.userData.topic!;
         const marker = renderable.userData.marker!;
         const frameId = marker.header.frame_id;
         const srcTime = marker.frame_locked ? currentTime : renderable.userData.srcTime!;
@@ -246,6 +329,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
           currentTime,
           srcTime,
         );
+
+        if (marker.text) {
+          // FIXME: Track shown labels to avoid duplicate emits and to emit removeLabel
+          this.emit("showLabel", getMarkerIdForMarker(topic, marker), marker, this);
+        }
       }
     }
 
@@ -258,6 +346,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
   };
 
   resizeHandler = (size: Size): void => {
+    console.debug(`[Renderer] Resizing to ${size.width}x${size.height}`);
     this.camera.aspect = size.width / size.height;
     this.camera.updateProjectionMatrix();
 
@@ -271,7 +360,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
 }
 
 function setMaterialColor(
-  output: THREE.MeshBasicMaterial | THREE.MeshStandardMaterial,
+  output: THREE.MeshBasicMaterial | THREE.MeshStandardMaterial | THREE.MeshToonMaterial,
   color: Readonly<ColorRGBA>,
 ): void {
   output.color.r = color.r;
@@ -292,15 +381,7 @@ function updatePose(
 ): void {
   const pose = renderable.userData.pose as Pose;
   const poseApplied = Boolean(
-    transformTree.apply(
-      tempPose,
-      pose,
-      renderFrameId,
-      fixedFrameId,
-      srcFrameId,
-      dstTime,
-      srcTime,
-    ),
+    transformTree.apply(tempPose, pose, renderFrameId, fixedFrameId, srcFrameId, dstTime, srcTime),
   );
   renderable.visible = poseApplied;
   if (poseApplied) {
@@ -310,4 +391,12 @@ function updatePose(
     renderable.quaternion.set(q.x, q.y, q.z, q.w);
     renderable.updateMatrix();
   }
+}
+
+function getMarkerIdForMarker(topic: string, marker: Marker): string {
+  return getMarkerId(topic, marker.ns, marker.id);
+}
+
+function getMarkerId(topic: string, ns: string, id: number): string {
+  return `${topic}:${ns ? ns + ":" : ""}${id}`.replace(/\s/g, "_");
 }

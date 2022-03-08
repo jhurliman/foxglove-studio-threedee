@@ -1,13 +1,14 @@
 /** @jsxImportSource @emotion/react */
 import { jsx } from "@emotion/react";
+import { css } from "@emotion/css";
 
 import { PanelExtensionContext, RenderState, Topic, MessageEvent } from "@foxglove/studio";
-import React from "react";
+import React, { useRef } from "react";
 import { useLayoutEffect, useEffect, useState, useMemo } from "react";
 import ReactDOM from "react-dom";
 import { DebugGui } from "./DebugGui";
 import { Renderer } from "./Renderer";
-import { RendererContext, useRendererEvent } from "./RendererContext";
+import { RendererContext, useRenderer, useRendererEvent } from "./RendererContext";
 import { Stats } from "./Stats";
 import {
   TRANSFORM_STAMPED_DATATYPES,
@@ -18,30 +19,104 @@ import {
   Marker,
 } from "./ros";
 import { rosTimeToNanoSec } from "./transforms/time";
+import { setOverlayPosition } from "./LabelOverlay";
 
 const SHOW_STATS = true;
 const SHOW_DEBUG = false;
 
+const MONOSPACE_FONTS = `"IBM Plex Mono", Consolas, "Andale Mono WT", "Andale Mono", "Lucida Console", "Lucida Sans Typewriter", "DejaVu Sans Mono", "Bitstream Vera Sans Mono", "Liberation Mono", "Nimbus Mono L", Monaco, "Courier New", Courier, monospace`;
 const EMPTY_LIST: string[] = [];
 
-function RendererOverlay(): JSX.Element {
+const labelLight = css`
+  position: relative;
+  font-family: ${MONOSPACE_FONTS};
+  color: #27272b;
+  background-color: #ececec;
+`;
+
+const labelDark = css`
+  position: relative;
+  font-family: ${MONOSPACE_FONTS};
+  color: #e1e1e4;
+  background-color: #181818;
+`;
+
+function RendererOverlay(props: { colorScheme: "dark" | "light" | undefined }): JSX.Element {
+  const colorScheme = props.colorScheme;
   const [_selectedRenderable, setSelectedRenderable] = useState<THREE.Object3D | null>(null);
+  const [labelsMap, setLabelsMap] = useState(new Map<string, Marker>());
+  const labelsRef = useRef<HTMLDivElement>(null);
+  const renderer = useRenderer();
+
   useRendererEvent("renderableSelected", (renderable) => setSelectedRenderable(renderable));
 
+  useRendererEvent("showLabel", (labelId: string, labelMarker: Marker) => {
+    const curLabelMarker = labelsMap.get(labelId);
+    if (curLabelMarker === labelMarker) return;
+    setLabelsMap(new Map(labelsMap.set(labelId, labelMarker)));
+  });
+
+  useRendererEvent("removeLabel", (labelId: string) => {
+    if (!labelsMap.has(labelId)) return;
+    labelsMap.delete(labelId);
+    setLabelsMap(new Map(labelsMap));
+  });
+
+  useRendererEvent("endFrame", () => {
+    if (renderer && labelsRef.current) {
+      for (const labelId of labelsMap.keys()) {
+        const labelEl = document.getElementById(`label-${labelId}`);
+        if (labelEl) {
+          const worldPosition = renderer.markerWorldPosition(labelId);
+          if (worldPosition) {
+            setOverlayPosition(labelEl.style, worldPosition, renderer.camera, renderer.canvas);
+          }
+        }
+      }
+    }
+  });
+
+  // Create a div for each label
+  const labelElements = useMemo(() => {
+    const labelElements: JSX.Element[] = [];
+    if (!renderer) return labelElements;
+    const style = { left: "", top: "", transform: "" };
+    const className = colorScheme === "dark" ? labelDark : labelLight;
+    for (const [labelId, labelMarker] of labelsMap) {
+      const worldPosition = renderer.markerWorldPosition(labelId);
+      if (worldPosition) {
+        setOverlayPosition(style, worldPosition, renderer.camera, renderer.canvas);
+        labelElements.push(
+          <div id={`label-${labelId}`} key={labelId} className={className} style={style}>
+            {labelMarker.text}
+          </div>,
+        );
+      }
+    }
+    return labelElements;
+  }, [renderer, labelsMap, colorScheme]);
+
+  const labels = (
+    <div id="labels" ref={labelsRef} css={{ position: "absolute", top: 0 }}>
+      {labelElements}
+    </div>
+  );
+
   const stats = SHOW_STATS ? (
-    <div css={{ position: "absolute", top: 0 }}>
+    <div id="stats" css={{ position: "absolute", top: 0 }}>
       <Stats />
     </div>
   ) : undefined;
 
   const debug = SHOW_DEBUG ? (
-    <div css={{ position: "absolute", top: 60 }}>
+    <div id="debug" css={{ position: "absolute", top: 60 }}>
       <DebugGui />
     </div>
   ) : undefined;
 
   return (
     <React.Fragment>
+      {labels}
       {stats}
       {debug}
     </React.Fragment>
@@ -199,7 +274,7 @@ export function ThreeDeePanel({ context }: { context: PanelExtensionContext }): 
     <React.Fragment>
       <canvas ref={setCanvas} css={{ position: "absolute", top: 0 }} />
       <RendererContext.Provider value={renderer}>
-        <RendererOverlay />
+        <RendererOverlay colorScheme={colorScheme} />
       </RendererContext.Provider>
     </React.Fragment>
   );
