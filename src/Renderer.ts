@@ -109,6 +109,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.dirLight.shadow.mapSize.height = 2048;
     this.dirLight.shadow.camera.near = 0.5;
     this.dirLight.shadow.camera.far = 500;
+    this.dirLight.shadow.bias = -0.00001;
 
     this.scene.add(this.dirLight);
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0xffffff, 0.5));
@@ -368,6 +369,7 @@ function setMaterialColor(
   output.color.b = color.b;
   output.color.convertSRGBToLinear();
   output.opacity = color.a;
+  output.transparent = color.a < 1.0;
 }
 
 function updatePose(

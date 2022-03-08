@@ -47,7 +47,7 @@ export const BasicRender: ComponentStory<typeof ThreeDeePanel> = () => {
     marker0.pose.orientation.z = 0.383;
     marker0.pose.orientation.w = 0.924;
     marker0.scale.z = 0.1;
-    marker0.color = { r: 111 / 255, g: 59 / 255, b: 232 / 255, a: 1 };
+    marker0.color = { r: 111 / 255, g: 59 / 255, b: 232 / 255, a: 0.75 };
 
     const marker1 = createMarker();
     marker1.id = 1;
@@ -55,7 +55,7 @@ export const BasicRender: ComponentStory<typeof ThreeDeePanel> = () => {
     marker1.text = "Cylinder";
     marker1.pose.position.z = 0.1;
     marker1.scale = { x: 0.5, y: 0.5, z: 0.5 };
-    marker1.color = { r: 1, g: 0, b: 0, a: 1 };
+    marker1.color = { r: 1, g: 0, b: 0, a: 0.25 };
 
     const markers: { markers: Marker[] } = {
       markers: [marker0, marker1],
