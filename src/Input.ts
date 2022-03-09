@@ -47,6 +47,7 @@ export class Input extends EventEmitter<InputEvents> {
   onResize = (_entries: ResizeObserverEntry[]) => {
     if (this.canvas.parentElement) {
       const newSize = innerSize(this.canvas.parentElement);
+      if (isNaN(newSize.width) || isNaN(newSize.height)) return;
       if (newSize.width !== this.canvasSize.width || newSize.height !== this.canvasSize.height) {
         this.canvasSize.width = newSize.width;
         this.canvasSize.height = newSize.height;
@@ -129,6 +130,6 @@ function innerSize(node: HTMLElement) {
 
   const width = node.clientWidth - paddingX - borderX;
   const height = node.clientHeight - paddingY - borderY;
-  
+
   return { width, height };
 }

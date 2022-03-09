@@ -27,8 +27,7 @@ function LabelOverlayBase(props: Props): JSX.Element {
         position: "absolute",
         width: MAX_SIZE,
         height: MAX_SIZE,
-        backgroundColor: "black",
-        pointerEvents: "auto",
+        pointerEvents: "none",
       }}
     ></div>
   );
@@ -37,13 +36,13 @@ function LabelOverlayBase(props: Props): JSX.Element {
 export function setOverlayPosition(
   output: { left: string; top: string; transform: string },
   worldPosition: THREE.Vector3,
+  canvasSize: THREE.Vector2,
   camera: THREE.Camera,
-  canvas: HTMLCanvasElement,
 ): void {
   tempV.copy(worldPosition);
   tempV.project(camera);
-  const x = (tempV.x * 0.5 + 0.5) * canvas.clientWidth;
-  const y = (tempV.y * -0.5 + 0.5) * canvas.clientHeight;
+  const x = (tempV.x * 0.5 + 0.5) * canvasSize.width;
+  const y = (tempV.y * -0.5 + 0.5) * canvasSize.height;
 
   const dist = tempV.distanceTo(camera.position);
   const interpolant = 1 - MathUtils.clamp((dist - MIN_DIST) / (MAX_DIST - MIN_DIST), 0, 1);

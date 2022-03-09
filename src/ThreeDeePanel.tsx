@@ -25,20 +25,19 @@ const SHOW_STATS = true;
 const SHOW_DEBUG = false;
 
 const MONOSPACE_FONTS = `"IBM Plex Mono", Consolas, "Andale Mono WT", "Andale Mono", "Lucida Console", "Lucida Sans Typewriter", "DejaVu Sans Mono", "Bitstream Vera Sans Mono", "Liberation Mono", "Nimbus Mono L", Monaco, "Courier New", Courier, monospace`;
-const EMPTY_LIST: string[] = [];
 
 const labelLight = css`
   position: relative;
   font-family: ${MONOSPACE_FONTS};
   color: #27272b;
-  background-color: #ececec;
+  background-color: #ececec99;
 `;
 
 const labelDark = css`
   position: relative;
   font-family: ${MONOSPACE_FONTS};
   color: #e1e1e4;
-  background-color: #181818;
+  background-color: #181818cc;
 `;
 
 function RendererOverlay(props: { colorScheme: "dark" | "light" | undefined }): JSX.Element {
@@ -69,7 +68,12 @@ function RendererOverlay(props: { colorScheme: "dark" | "light" | undefined }): 
         if (labelEl) {
           const worldPosition = renderer.markerWorldPosition(labelId);
           if (worldPosition) {
-            setOverlayPosition(labelEl.style, worldPosition, renderer.camera, renderer.canvas);
+            setOverlayPosition(
+              labelEl.style,
+              worldPosition,
+              renderer.input.canvasSize,
+              renderer.camera,
+            );
           }
         }
       }
@@ -85,7 +89,7 @@ function RendererOverlay(props: { colorScheme: "dark" | "light" | undefined }): 
     for (const [labelId, labelMarker] of labelsMap) {
       const worldPosition = renderer.markerWorldPosition(labelId);
       if (worldPosition) {
-        setOverlayPosition(style, worldPosition, renderer.camera, renderer.canvas);
+        setOverlayPosition(style, worldPosition, renderer.input.canvasSize, renderer.camera);
         labelElements.push(
           <div id={`label-${labelId}`} key={labelId} className={className} style={style}>
             {labelMarker.text}
@@ -196,7 +200,7 @@ export function ThreeDeePanel({ context }: { context: PanelExtensionContext }): 
   const topicsToSubscribe = useMemo(() => {
     const subscriptionList: string[] = [];
     if (!topics) {
-      return EMPTY_LIST;
+      return undefined;
     }
 
     for (const topic of topics) {
@@ -216,6 +220,7 @@ export function ThreeDeePanel({ context }: { context: PanelExtensionContext }): 
 
   // Notify the extension context when our subscription list changes
   useEffect(() => {
+    if (!topicsToSubscribe) return;
     console.info(`[ThreeDeePanel] Subscribing to [${topicsToSubscribe.join(", ")}]`);
     context.subscribe(topicsToSubscribe);
   }, [topicsToSubscribe]);

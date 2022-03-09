@@ -1,12 +1,16 @@
 import * as THREE from "three";
 import EventEmitter from "eventemitter3";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
 import { Input } from "./Input";
 import { TransformTree } from "./transforms";
 import { Marker, TF } from "./ros";
 import { Markers } from "./renderables/Markers";
 import { FrameAxes } from "./renderables/FrameAxes";
+
+import "./webgl-memory";
+import { TopicErrors } from "./TopicErrors";
 
 export type RendererEvents = {
   startFrame: (currentTime: bigint, renderer: Renderer) => void;
@@ -15,6 +19,11 @@ export type RendererEvents = {
   transformTreeUpdated: (renderer: Renderer) => void;
   showLabel: (labelId: string, labelMarker: Marker, renderer: Renderer) => void;
   removeLabel: (labelId: string, renderer: Renderer) => void;
+};
+
+type MemoryInfo = {
+  memory: Record<string, number>;
+  resources: Record<string, number>;
 };
 
 // NOTE: These do not use .convertSRGBToLinear() since background color is not
@@ -30,7 +39,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
   input: Input;
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
-  transformTree: TransformTree;
+  topicErrors = new TopicErrors();
+  gltfLoader = new GLTFLoader();
+  transformTree = new TransformTree();
   currentTime: bigint | undefined;
   fixedFrameId: string | undefined;
   renderFrameId: string | undefined;
@@ -103,7 +114,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
     this.controls = new OrbitControls(this.camera, this.gl.domElement);
 
-    this.transformTree = new TransformTree();
+    this.printMemoryStats();
+    setInterval(() => this.printMemoryStats(), 30_000);
 
     this.animationFrame(performance.now());
   }
@@ -127,6 +139,19 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   markerWorldPosition(markerId: string): Readonly<THREE.Vector3> | undefined {
     return this.markers.markerWorldPosition(markerId);
+  }
+
+  printMemoryStats(): void {
+    const ext = this.gl.getContext().getExtension('GMAN_webgl_memory') as { getMemoryInfo: () => MemoryInfo } | undefined;
+    if (ext) {
+      const info = ext.getMemoryInfo();
+      for (const [key, value] of Object.entries(info.memory)) {
+        console.info(`[Renderer][Memory] ${key}: ${byteString(value) }`);
+      }
+      for (const [key, value] of Object.entries(info.resources)) {
+        console.info(`[Renderer][Resources] ${key}: ${value}`);
+      }
+    }
   }
 
   // Callback handlers
@@ -170,4 +195,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
   clickHandler = (_cursorCoords: THREE.Vector2): void => {
     //
   };
+}
+
+const FILESIZE_SUFFIXES = ["B", "kB", "MB", "GB", "TB"];
+function byteString(size: number): string {
+  const i = size == 0 ? 0 : Math.floor(Math.log(size) / Math.log(1024));
+  const n = Number((size / Math.pow(1024, i)).toFixed(2));
+  return n + " " + FILESIZE_SUFFIXES[i];
 }

@@ -71,11 +71,42 @@ export const BasicRender: ComponentStory<typeof ThreeDeePanel> = () => {
       { r: 0, g: 1, b: 0, a: 0.5 },
       { r: 0, g: 0, b: 1, a: 1 },
     ]
-    marker2.scale.x = 0.2;
-    marker2.color = { r: 1, g: 1, b: 1, a: 0.99 };
+    marker2.scale.x = 0.1;
+
+    const marker3 = createMarker();
+    marker3.id = 3;
+    marker3.type = MarkerType.SPHERE_LIST;
+    marker3.pose.position.x = -1;
+    marker3.points = [
+      { x: 0, y: 0, z: -0.5 },
+      { x: 0, y: 0, z: 0 },
+      { x: 0, y: 0, z: 0.5 },
+    ];
+    marker3.colors = [
+      { r: 1, g: 0, b: 0, a: 0.33 },
+      { r: 0, g: 1, b: 0, a: 0.5 },
+      { r: 0, g: 0, b: 1, a: 1 },
+    ];
+    marker3.scale = { x: 0.1, y: 0.2, z: 0.3 };
+
+    const marker4 = createMarker();
+    marker4.id = 4;
+    marker4.type = MarkerType.POINTS;
+    marker4.pose.position.x = 1;
+    marker4.points = [
+      { x: 0, y: 0, z: -0.5 },
+      { x: 0, y: 0, z: 0 },
+      { x: 0, y: 0, z: 0.5 },
+    ];
+    marker4.colors = [
+      { r: 1, g: 0, b: 0, a: 0.33 },
+      { r: 0, g: 1, b: 0, a: 0.5 },
+      { r: 0, g: 0, b: 1, a: 1 },
+    ];
+    marker4.scale = { x: 0.1, y: 0.2, z: 0.3 };
 
     const markers: { markers: Marker[] } = {
-      markers: [marker0, marker1, marker2],
+      markers: [marker0, marker1, marker2, marker3, marker4],
     };
     const renderState: RenderState = {
       topics: [
@@ -99,7 +130,7 @@ export const BasicRender: ComponentStory<typeof ThreeDeePanel> = () => {
       colorScheme: "light",
     };
     const renderDone = () => {
-      console.log(`Render done`);
+      console.log(`[ThreeDeePanel.stories] Render done`);
     };
     context.onRender!(renderState, renderDone);
   }, 100);
