@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import EventEmitter from "eventemitter3";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 
 import { Input } from "./Input";
 import { TransformTree } from "./transforms";
@@ -40,7 +40,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
   topicErrors = new TopicErrors();
-  gltfLoader = new GLTFLoader();
+  gltfLoader: GLTFLoader;
   transformTree = new TransformTree();
   currentTime: bigint | undefined;
   fixedFrameId: string | undefined;
@@ -82,6 +82,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.gl.toneMapping = THREE.NoToneMapping;
     this.gl.outputEncoding = THREE.sRGBEncoding;
     this.gl.autoClear = false;
+
+    this.gltfLoader = new GLTFLoader();
 
     this.scene = new THREE.Scene();
     this.scene.add(this.frameAxes);
@@ -142,11 +144,13 @@ export class Renderer extends EventEmitter<RendererEvents> {
   }
 
   printMemoryStats(): void {
-    const ext = this.gl.getContext().getExtension('GMAN_webgl_memory') as { getMemoryInfo: () => MemoryInfo } | undefined;
+    const ext = this.gl.getContext().getExtension("GMAN_webgl_memory") as
+      | { getMemoryInfo: () => MemoryInfo }
+      | undefined;
     if (ext) {
       const info = ext.getMemoryInfo();
       for (const [key, value] of Object.entries(info.memory)) {
-        console.info(`[Renderer][Memory] ${key}: ${byteString(value) }`);
+        console.info(`[Renderer][Memory] ${key}: ${byteString(value)}`);
       }
       for (const [key, value] of Object.entries(info.resources)) {
         console.info(`[Renderer][Resources] ${key}: ${value}`);

@@ -1,9 +1,10 @@
 import * as THREE from "three";
+import { MeshStandardMaterial } from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry";
-import { GLTF } from "three/examples/jsm/loaders/GLTFLoader";
+import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader";
 import { LineMaterial } from "../LineMaterial";
 import { Renderer } from "../Renderer";
 import { ColorRGBA, Marker, MarkerType, Pose } from "../ros";
@@ -20,6 +21,11 @@ type MarkerRenderable = THREE.Object3D & {
     mesh?: THREE.Mesh;
   };
 };
+
+type GltfMesh = THREE.Mesh<
+  THREE.BufferGeometry,
+  THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[]
+>;
 
 type Material =
   | THREE.MeshBasicMaterial
@@ -161,7 +167,6 @@ export class Markers extends THREE.Object3D {
         // Labels are created as <div> elements
         break;
       case MarkerType.MESH_RESOURCE:
-        // TODO
         this._createMeshResource(renderable, topic, marker);
         break;
       case MarkerType.TRIANGLE_LIST:
@@ -413,6 +418,41 @@ export class Markers extends THREE.Object3D {
     try {
       gltf = await this.renderer.gltfLoader.loadAsync(marker.mesh_resource);
       this.gltfMeshes.set(marker.mesh_resource, gltf);
+
+      // Y-up to Z-up
+      gltf.scene.rotateX(Math.PI / 2);
+
+      // Apply scaling
+      gltf.scene.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
+
+      let material: THREE.MeshStandardMaterial | undefined;
+      if (!marker.mesh_use_embedded_materials) {
+        material = new THREE.MeshStandardMaterial({ dithering: true });
+        setMaterialColor(material, marker.color);
+      }
+
+      gltf.scene.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+
+        // Enable shadows for all meshes
+        child.castShadow = true;
+        child.receiveShadow = true;
+
+        if (!marker.mesh_use_embedded_materials) {
+          // Dispose of any allocated textures and the material and swap it with
+          // our own material
+          const meshChild = child as GltfMesh;
+          if (Array.isArray(meshChild.material)) {
+            for (const material of meshChild.material) {
+              disposeMaterial(material);
+            }
+          } else {
+            disposeMaterial(meshChild.material);
+          }
+          meshChild.material = material!;
+        }
+      });
+
       output.add(gltf.scene);
     } catch (ex) {
       this.renderer.topicErrors.add(
@@ -523,4 +563,19 @@ function hasTransparency(marker: Marker): boolean {
     }
   }
   return marker.color.a < 1.0;
+}
+
+function disposeMaterial(material: MeshStandardMaterial): void {
+  material.map?.dispose();
+  material.lightMap?.dispose();
+  material.aoMap?.dispose();
+  material.emissiveMap?.dispose();
+  material.bumpMap?.dispose();
+  material.normalMap?.dispose();
+  material.displacementMap?.dispose();
+  material.roughnessMap?.dispose();
+  material.metalnessMap?.dispose();
+  material.alphaMap?.dispose();
+  material.envMap?.dispose();
+  material.dispose();
 }
