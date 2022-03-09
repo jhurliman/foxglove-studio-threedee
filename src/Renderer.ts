@@ -2,11 +2,11 @@ import * as THREE from "three";
 import EventEmitter from "eventemitter3";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
-import { Input, Size } from "./Input";
-import { Transform, TransformTree } from "./transforms";
-import { makePose, Pose } from "./transforms/geometry";
-import { ColorRGBA, Marker, MarkerType, TF } from "./ros";
-import { rosTimeToNanoSec } from "./transforms/time";
+import { Input } from "./Input";
+import { TransformTree } from "./transforms";
+import { Marker, TF } from "./ros";
+import { Markers } from "./renderables/Markers";
+import { FrameAxes } from "./renderables/FrameAxes";
 
 export type RendererEvents = {
   startFrame: (currentTime: bigint, renderer: Renderer) => void;
@@ -17,32 +17,10 @@ export type RendererEvents = {
   removeLabel: (labelId: string, renderer: Renderer) => void;
 };
 
-type CoordinateFrameRenderable = THREE.Object3D & {
-  userData: {
-    frameId?: string;
-    type?: string;
-    selectable?: boolean;
-    pose?: Pose;
-  };
-};
-
-type MarkerRenderable = THREE.Object3D & {
-  userData: {
-    topic?: string;
-    marker?: Marker;
-    srcTime?: bigint;
-    pose?: Pose;
-    mesh?: THREE.Mesh;
-  };
-};
-
 // NOTE: These do not use .convertSRGBToLinear() since background color is not
 // affected by gamma correction
 const LIGHT_BACKDROP = new THREE.Color(0xececec);
 const DARK_BACKDROP = new THREE.Color(0x121217);
-
-const tempVec = new THREE.Vector3();
-const tempPose = makePose();
 
 export class Renderer extends EventEmitter<RendererEvents> {
   canvas: HTMLCanvasElement;
@@ -54,19 +32,14 @@ export class Renderer extends EventEmitter<RendererEvents> {
   controls: OrbitControls;
   transformTree: TransformTree;
   currentTime: bigint | undefined;
+  fixedFrameId: string | undefined;
+  renderFrameId: string | undefined;
 
-  coordinateFrameRenderables = new Map<string, CoordinateFrameRenderable>();
-  markerRenderables = new Map<string, MarkerRenderable>();
-
-  boxGeometry = new THREE.BoxGeometry(1, 1, 1);
-  sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
-  cylinderGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
+  frameAxes = new FrameAxes(this);
+  markers = new Markers(this);
 
   constructor(canvas: HTMLCanvasElement) {
     super();
-
-    // Make the cylinder geometry stand upright
-    this.cylinderGeometry.rotateX(Math.PI / 2);
 
     // NOTE: Global side effect
     THREE.Object3D.DefaultUp = new THREE.Vector3(0, 0, 1);
@@ -100,6 +73,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.gl.autoClear = false;
 
     this.scene = new THREE.Scene();
+    this.scene.add(this.frameAxes);
+    this.scene.add(this.markers);
 
     this.dirLight = new THREE.DirectionalLight();
     this.dirLight.position.set(1, 1, 1);
@@ -139,150 +114,19 @@ export class Renderer extends EventEmitter<RendererEvents> {
   }
 
   addTransformMessage(tf: TF): void {
-    let frameAdded = false;
-    if (!this.transformTree.hasFrame(tf.header.frame_id)) {
-      this.addCoordinateFrameRenderable(tf.header.frame_id);
-      frameAdded = true;
-    }
-    if (!this.transformTree.hasFrame(tf.child_frame_id)) {
-      this.addCoordinateFrameRenderable(tf.child_frame_id);
-      frameAdded = true;
-    }
-
-    const stamp = rosTimeToNanoSec(tf.header.stamp);
-    const t = tf.transform.translation;
-    const q = tf.transform.rotation;
-    const transform = new Transform([t.x, t.y, t.z], [q.x, q.y, q.z, q.w]);
-    this.transformTree.addTransform(tf.child_frame_id, tf.header.frame_id, stamp, transform);
-
-    if (frameAdded) {
-      console.info(`[Renderer] Added transform "${tf.header.frame_id}_T_${tf.child_frame_id}"`);
-      this.emit("transformTreeUpdated", this);
-    }
+    this.frameAxes.addTransformMessage(tf);
   }
 
   addMarkerMessage(topic: string, marker: Marker): void {
-    const markerId = getMarkerIdForMarker(topic, marker);
-
-    let renderable = this.markerRenderables.get(markerId);
-    if (!renderable) {
-      renderable = new THREE.Object3D() as MarkerRenderable;
-      renderable.name = markerId;
-      renderable.userData.topic = topic;
-      renderable.userData.marker = marker;
-      renderable.userData.srcTime = rosTimeToNanoSec(marker.header.stamp);
-      renderable.userData.pose = makePose();
-
-      this.scene.add(renderable);
-      this.markerRenderables.set(markerId, renderable);
-    }
-
-    this.updateMarkerRenderable(renderable, topic, marker);
+    this.markers.addMarkerMessage(topic, marker);
   }
 
   removeMarkerMessage(topic: string, ns: string, id: number): void {
-    const markerId = getMarkerId(topic, ns, id);
-    const renderable = this.markerRenderables.get(markerId);
-    if (renderable) {
-      this.scene.remove(renderable);
-      this.markerRenderables.delete(markerId);
-    }
+    this.markers.removeMarkerMessage(topic, ns, id);
   }
 
   markerWorldPosition(markerId: string): Readonly<THREE.Vector3> | undefined {
-    const renderable = this.markerRenderables.get(markerId);
-    if (!renderable) return undefined;
-
-    tempVec.set(0, 0, 0);
-    tempVec.applyMatrix4(renderable.matrixWorld);
-    return tempVec;
-  }
-
-  addCoordinateFrameRenderable(frameId: string): void {
-    if (this.coordinateFrameRenderables.has(frameId)) return;
-
-    const frame = new THREE.Object3D() as CoordinateFrameRenderable;
-    frame.name = frameId;
-    frame.userData.frameId = frameId;
-    frame.userData.type = "CoordinateFrame";
-    frame.userData.selectable = true;
-    frame.userData.pose = makePose();
-
-    const AXIS_DEFAULT_LENGTH = 1; // [m]
-    const axes = new THREE.AxesHelper(AXIS_DEFAULT_LENGTH);
-    frame.add(axes);
-
-    // TODO: <div> floating label
-
-    this.scene.add(frame);
-    this.coordinateFrameRenderables.set(frameId, frame);
-  }
-
-  updateMarkerRenderable(renderable: MarkerRenderable, topic: string, marker: Marker): void {
-    renderable.userData.topic = topic;
-    renderable.userData.marker = marker;
-    renderable.userData.pose = marker.pose;
-
-    renderable.children.length = 0;
-
-    switch (marker.type) {
-      case MarkerType.CUBE: {
-        const material = new THREE.MeshStandardMaterial({ dithering: true });
-        setMaterialColor(material, marker.color);
-        const cube = new THREE.Mesh(this.boxGeometry, material);
-        cube.castShadow = true;
-        cube.receiveShadow = true;
-        cube.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
-
-        const edges = new THREE.EdgesGeometry(this.boxGeometry, 40);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-        const line = new THREE.LineSegments(edges, lineMaterial);
-        line.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
-        renderable.add(line);
-
-        renderable.add(cube);
-        break;
-      }
-      case MarkerType.SPHERE: {
-        const material = new THREE.MeshStandardMaterial({ dithering: true });
-        setMaterialColor(material, marker.color);
-        const sphere = new THREE.Mesh(this.sphereGeometry, material);
-        sphere.castShadow = true;
-        sphere.receiveShadow = true;
-        sphere.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
-
-        const edges = new THREE.EdgesGeometry(this.sphereGeometry, 40);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-        const line = new THREE.LineSegments(edges, lineMaterial);
-        line.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
-        renderable.add(line);
-
-        renderable.add(sphere);
-        break;
-      }
-      case MarkerType.CYLINDER: {
-        const material = new THREE.MeshStandardMaterial({ dithering: true });
-        setMaterialColor(material, marker.color);
-        const cylinder = new THREE.Mesh(this.cylinderGeometry, material);
-        cylinder.castShadow = true;
-        cylinder.receiveShadow = true;
-        cylinder.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
-
-        const edges = new THREE.EdgesGeometry(this.cylinderGeometry, 40);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-        const line = new THREE.LineSegments(edges, lineMaterial);
-        line.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
-        renderable.add(line);
-
-        renderable.add(cylinder);
-        break;
-      }
-      case MarkerType.TEXT_VIEW_FACING:
-        // Labels are created as <div> elements
-        break;
-      default:
-        console.warn(`[Renderer] Unsupported marker type: ${marker.type}`);
-    }
+    return this.markers.markerWorldPosition(markerId);
   }
 
   // Callback handlers
@@ -299,44 +143,12 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
     this.controls.update();
 
-    // TODO: persist the fixed frame
-    const fixedFrameId = this.transformTree.frames().keys().next().value as string | undefined;
-    if (fixedFrameId) {
-      const renderFrameId = fixedFrameId;
+    // TODO: Remove this hack when the user can set the renderFrameId themselves
+    this.fixedFrameId = this.transformTree.frames().keys().next().value as string | undefined;
+    this.renderFrameId = this.fixedFrameId;
 
-      for (const [frameId, renderable] of this.coordinateFrameRenderables.entries()) {
-        updatePose(
-          renderable,
-          this.transformTree,
-          renderFrameId,
-          fixedFrameId,
-          frameId,
-          currentTime,
-          currentTime,
-        );
-      }
-
-      for (const renderable of this.markerRenderables.values()) {
-        const topic = renderable.userData.topic!;
-        const marker = renderable.userData.marker!;
-        const frameId = marker.header.frame_id;
-        const srcTime = marker.frame_locked ? currentTime : renderable.userData.srcTime!;
-        updatePose(
-          renderable,
-          this.transformTree,
-          renderFrameId,
-          fixedFrameId,
-          frameId,
-          currentTime,
-          srcTime,
-        );
-
-        if (marker.text) {
-          // FIXME: Track shown labels to avoid duplicate emits and to emit removeLabel
-          this.emit("showLabel", getMarkerIdForMarker(topic, marker), marker, this);
-        }
-      }
-    }
+    this.frameAxes.startFrame(currentTime);
+    this.markers.startFrame(currentTime);
 
     this.gl.clear();
     this.gl.render(this.scene, this.camera);
@@ -346,7 +158,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.gl.info.reset();
   };
 
-  resizeHandler = (size: Size): void => {
+  resizeHandler = (size: THREE.Vector2): void => {
     console.debug(`[Renderer] Resizing to ${size.width}x${size.height}`);
     this.camera.aspect = size.width / size.height;
     this.camera.updateProjectionMatrix();
@@ -358,47 +170,4 @@ export class Renderer extends EventEmitter<RendererEvents> {
   clickHandler = (_cursorCoords: THREE.Vector2): void => {
     //
   };
-}
-
-function setMaterialColor(
-  output: THREE.MeshBasicMaterial | THREE.MeshStandardMaterial | THREE.MeshToonMaterial,
-  color: Readonly<ColorRGBA>,
-): void {
-  output.color.r = color.r;
-  output.color.g = color.g;
-  output.color.b = color.b;
-  output.color.convertSRGBToLinear();
-  output.opacity = color.a;
-  output.transparent = color.a < 1.0;
-}
-
-function updatePose(
-  renderable: THREE.Object3D,
-  transformTree: TransformTree,
-  renderFrameId: string,
-  fixedFrameId: string,
-  srcFrameId: string,
-  dstTime: bigint,
-  srcTime: bigint,
-): void {
-  const pose = renderable.userData.pose as Pose;
-  const poseApplied = Boolean(
-    transformTree.apply(tempPose, pose, renderFrameId, fixedFrameId, srcFrameId, dstTime, srcTime),
-  );
-  renderable.visible = poseApplied;
-  if (poseApplied) {
-    const p = tempPose.position;
-    const q = tempPose.orientation;
-    renderable.position.set(p.x, p.y, p.z);
-    renderable.quaternion.set(q.x, q.y, q.z, q.w);
-    renderable.updateMatrix();
-  }
-}
-
-function getMarkerIdForMarker(topic: string, marker: Marker): string {
-  return getMarkerId(topic, marker.ns, marker.id);
-}
-
-function getMarkerId(topic: string, ns: string, id: number): string {
-  return `${topic}:${ns ? ns + ":" : ""}${id}`.replace(/\s/g, "_");
 }

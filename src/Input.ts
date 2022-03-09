@@ -4,10 +4,8 @@ import { Key } from "ts-key-enum";
 
 const MAX_DIST = 1;
 
-export type Size = { width: number; height: number };
-
 export type InputEvents = {
-  resize: (windowSize: Size) => void;
+  resize: (windowSize: THREE.Vector2) => void;
   click: (cursorCoords: THREE.Vector2, event: MouseEvent) => void;
   mousedown: (cursorCoords: THREE.Vector2, event: MouseEvent) => void;
   mousemove: (cursorCoords: THREE.Vector2, event: MouseEvent) => void;
@@ -16,7 +14,7 @@ export type InputEvents = {
 
 export class Input extends EventEmitter<InputEvents> {
   readonly canvas: HTMLCanvasElement;
-  canvasSize: { width: number; height: number };
+  canvasSize: THREE.Vector2;
   resizeObserver: ResizeObserver;
   startClientPos?: THREE.Vector2; // clientX / clientY
   cursorCoords = new THREE.Vector2(); // Normalized device coordinates (-1 to +1)
@@ -30,7 +28,7 @@ export class Input extends EventEmitter<InputEvents> {
     }
 
     this.canvas = canvas;
-    this.canvasSize = { width: canvas.width, height: canvas.height };
+    this.canvasSize = new THREE.Vector2(canvas.width, canvas.height);
 
     this.resizeObserver = new ResizeObserver(this.onResize);
     this.resizeObserver.observe(parentEl);

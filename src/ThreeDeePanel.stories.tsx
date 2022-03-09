@@ -57,8 +57,25 @@ export const BasicRender: ComponentStory<typeof ThreeDeePanel> = () => {
     marker1.scale = { x: 0.5, y: 0.5, z: 0.5 };
     marker1.color = { r: 1, g: 0, b: 0, a: 0.25 };
 
+    const marker2 = createMarker();
+    marker2.id = 2;
+    marker2.type = MarkerType.LINE_STRIP;
+    marker2.pose.position.z = 0.4;
+    marker2.points = [
+      { x: 0, y: 0, z: 0 },
+      { x: 0.5, y: 0.5, z: 0 },
+      { x: 0, y: 0, z: 0.5 },
+    ];
+    marker2.colors = [
+      { r: 1, g: 0, b: 0, a: 0.33 },
+      { r: 0, g: 1, b: 0, a: 0.5 },
+      { r: 0, g: 0, b: 1, a: 1 },
+    ]
+    marker2.scale.x = 0.2;
+    marker2.color = { r: 1, g: 1, b: 1, a: 0.99 };
+
     const markers: { markers: Marker[] } = {
-      markers: [marker0, marker1],
+      markers: [marker0, marker1, marker2],
     };
     const renderState: RenderState = {
       topics: [
