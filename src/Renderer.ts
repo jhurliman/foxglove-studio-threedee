@@ -11,6 +11,7 @@ import { FrameAxes } from "./renderables/FrameAxes";
 
 import "./webgl-memory";
 import { TopicErrors } from "./TopicErrors";
+import { MaterialCache } from "./MaterialCache";
 
 export type RendererEvents = {
   startFrame: (currentTime: bigint, renderer: Renderer) => void;
@@ -39,7 +40,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
   input: Input;
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
+  materialCache = new MaterialCache();
   topicErrors = new TopicErrors();
+  colorScheme: "dark" | "light" | undefined;
   gltfLoader: GLTFLoader;
   transformTree = new TransformTree();
   currentTime: bigint | undefined;
@@ -124,6 +127,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   setColorScheme(colorScheme: "dark" | "light"): void {
     console.info(`[Renderer] Setting color scheme to "${colorScheme}"`);
+    this.colorScheme = colorScheme;
     this.gl.setClearColor(colorScheme === "dark" ? DARK_BACKDROP : LIGHT_BACKDROP, 1);
   }
 

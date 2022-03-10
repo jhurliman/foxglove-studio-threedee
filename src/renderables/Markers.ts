@@ -1,13 +1,18 @@
 import * as THREE from "three";
-import { MeshStandardMaterial } from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader";
 import { LineMaterial } from "../LineMaterial";
+import {
+  LineBasicColor,
+  LineVertexColor,
+  PointsVertexColor,
+  StandardColor,
+} from "../MaterialCache";
 import { Renderer } from "../Renderer";
-import { ColorRGBA, Marker, MarkerType, Pose } from "../ros";
+import { ColorRGBA, Marker, MarkerType, Pose, Vector3 } from "../ros";
 import { makePose } from "../transforms/geometry";
 import { rosTimeToNanoSec } from "../transforms/time";
 import { updatePose } from "../updatePose";
@@ -43,6 +48,9 @@ const INVALID_POINTS_LIST = "INVALID_POINTS_LIST";
 const INVALID_SPHERE_LIST = "INVALID_SPHERE_LIST";
 const MESH_FETCH_FAILED = "MESH_FETCH_FAILED";
 
+const OUTLINE_COLOR_DARK = { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+const OUTLINE_COLOR_LIGHT = { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
+
 const tempVec = new THREE.Vector3();
 const tempColor = new THREE.Color();
 
@@ -50,9 +58,13 @@ export class Markers extends THREE.Object3D {
   renderer: Renderer;
   renderables = new Map<string, MarkerRenderable>();
   gltfMeshes = new Map<string, GLTF | false>();
+
   boxGeometry = new THREE.BoxGeometry(1, 1, 1);
   sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
   cylinderGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
+
+  boxEdges: THREE.EdgesGeometry;
+  cylinderEdges: THREE.EdgesGeometry;
 
   constructor(renderer: Renderer) {
     super();
@@ -60,6 +72,9 @@ export class Markers extends THREE.Object3D {
 
     // Make the cylinder geometry stand upright
     this.cylinderGeometry.rotateX(Math.PI / 2);
+
+    this.boxEdges = new THREE.EdgesGeometry(this.boxGeometry, 40);
+    this.cylinderEdges = new THREE.EdgesGeometry(this.cylinderGeometry, 40);
   }
 
   addMarkerMessage(topic: string, marker: Marker): void {
@@ -181,18 +196,56 @@ export class Markers extends THREE.Object3D {
     }
   }
 
-  private _createCube(output: MarkerRenderable, marker: Marker): void {
-    const material = new THREE.MeshStandardMaterial({ dithering: true });
-    setMaterialColor(material, marker.color);
+  // Material creation
 
+  private _getColorMaterial(color: ColorRGBA): THREE.MeshStandardMaterial {
+    return this.renderer.materialCache.acquire(
+      StandardColor.id(color),
+      () => StandardColor.create(color),
+      StandardColor.dispose,
+    );
+  }
+
+  private _getOutlineMaterial(): THREE.LineBasicMaterial {
+    const color = this.renderer.colorScheme === "dark" ? OUTLINE_COLOR_DARK : OUTLINE_COLOR_LIGHT;
+    return this.renderer.materialCache.acquire(
+      LineBasicColor.id(color),
+      () => LineBasicColor.create(color),
+      LineBasicColor.dispose,
+    );
+  }
+
+  private _getPointsMaterial(scale: Vector3, transparent: boolean): THREE.PointsMaterial {
+    return this.renderer.materialCache.acquire(
+      PointsVertexColor.id(scale, transparent),
+      () => PointsVertexColor.create(scale, transparent),
+      PointsVertexColor.dispose,
+    );
+  }
+
+  private _getLineMaterial(
+    lineWidth: number,
+    transparent: boolean,
+    resolution: THREE.Vector2,
+  ): LineMaterial {
+    return this.renderer.materialCache.acquire(
+      LineVertexColor.id(lineWidth, transparent),
+      () => LineVertexColor.create(lineWidth, transparent, resolution),
+      LineVertexColor.dispose,
+    );
+  }
+
+  // Convert markers to renderable objects
+
+  private _createCube(output: MarkerRenderable, marker: Marker): void {
+    const material = this._getColorMaterial(marker.color);
     const cube = new THREE.Mesh(this.boxGeometry, material);
     cube.castShadow = true;
     cube.receiveShadow = true;
     cube.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
 
-    const edges = new THREE.EdgesGeometry(this.boxGeometry, 40);
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-    const line = new THREE.LineSegments(edges, lineMaterial);
+    const lineMaterial = this._getOutlineMaterial();
+    const line = new THREE.LineSegments(this.boxEdges, lineMaterial);
     line.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
 
     output.add(cube);
@@ -200,9 +253,7 @@ export class Markers extends THREE.Object3D {
   }
 
   private _createSphere(output: MarkerRenderable, marker: Marker): void {
-    const material = new THREE.MeshStandardMaterial({ dithering: true });
-    setMaterialColor(material, marker.color);
-
+    const material = this._getColorMaterial(marker.color);
     const sphere = new THREE.Mesh(this.sphereGeometry, material);
     sphere.castShadow = true;
     sphere.receiveShadow = true;
@@ -212,16 +263,14 @@ export class Markers extends THREE.Object3D {
   }
 
   private _createCylinder(output: MarkerRenderable, marker: Marker): void {
-    const material = new THREE.MeshStandardMaterial({ dithering: true });
-    setMaterialColor(material, marker.color);
+    const material = this._getColorMaterial(marker.color);
     const cylinder = new THREE.Mesh(this.cylinderGeometry, material);
     cylinder.castShadow = true;
     cylinder.receiveShadow = true;
     cylinder.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
 
-    const edges = new THREE.EdgesGeometry(this.cylinderGeometry, 40);
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-    const line = new THREE.LineSegments(edges, lineMaterial);
+    const lineMaterial = this._getOutlineMaterial();
+    const line = new THREE.LineSegments(this.cylinderEdges, lineMaterial);
     line.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
 
     output.add(cylinder);
@@ -250,15 +299,8 @@ export class Markers extends THREE.Object3D {
     geometry.setPositions(linePositions);
     setColorsFromLineStrip(geometry, marker);
 
-    const material = new LineMaterial({
-      worldUnits: true,
-      vertexColors: true,
-      resolution: this.renderer.input.canvasSize,
-    });
-    material.lineWidth = marker.scale.x;
-    material.transparent = hasTransparency(marker);
-    material.depthWrite = !material.transparent;
-
+    const resolution = this.renderer.input.canvasSize;
+    const material = this._getLineMaterial(marker.scale.x, hasTransparency(marker), resolution);
     const line = new Line2(geometry, material);
     line.computeLineDistances();
     output.add(line);
@@ -293,16 +335,8 @@ export class Markers extends THREE.Object3D {
     geometry.setPositions(linePositions);
     setColorsFromLineList(geometry, marker);
 
-    const material = new LineMaterial({
-      color: 0x00ffff,
-      worldUnits: true,
-      vertexColors: true,
-      resolution: this.renderer.input.canvasSize,
-    });
-    material.lineWidth = marker.scale.x;
-    material.transparent = hasTransparency(marker);
-    material.depthWrite = !material.transparent;
-
+    const resolution = this.renderer.input.canvasSize;
+    const material = this._getLineMaterial(marker.scale.x, hasTransparency(marker), resolution);
     const line = new LineSegments2(geometry, material);
     line.computeLineDistances();
     output.add(line);
@@ -314,22 +348,20 @@ export class Markers extends THREE.Object3D {
       return;
     }
 
+    const lineMaterial = this._getOutlineMaterial();
+
     for (let i = 0; i < marker.points.length; i++) {
       const point = marker.points[i]!;
       const color = marker.colors[i] ?? marker.color;
 
-      const material = new THREE.MeshStandardMaterial({ dithering: true });
-      setMaterialColor(material, color);
-
+      const material = this._getColorMaterial(color);
       const cube = new THREE.Mesh(this.boxGeometry, material);
       cube.castShadow = true;
       cube.receiveShadow = true;
       cube.position.set(point.x, point.y, point.z);
       cube.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
 
-      const edges = new THREE.EdgesGeometry(this.boxGeometry, 40);
-      const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-      const line = new THREE.LineSegments(edges, lineMaterial);
+      const line = new THREE.LineSegments(this.boxEdges, lineMaterial);
       line.position.set(point.x, point.y, point.z);
       line.scale.set(marker.scale.x, marker.scale.y, marker.scale.z);
 
@@ -348,9 +380,7 @@ export class Markers extends THREE.Object3D {
       const point = marker.points[i]!;
       const color = marker.colors[i] ?? marker.color;
 
-      const material = new THREE.MeshStandardMaterial({ dithering: true });
-      setMaterialColor(material, color);
-
+      const material = this._getColorMaterial(color);
       const sphere = new THREE.Mesh(this.sphereGeometry, material);
       sphere.castShadow = true;
       sphere.receiveShadow = true;
@@ -391,13 +421,7 @@ export class Markers extends THREE.Object3D {
     }
     geometry.setAttribute("color", new THREE.BufferAttribute(colors, 4));
 
-    const material = new THREE.PointsMaterial({
-      vertexColors: true,
-      size: marker.scale.x,
-    });
-    material.transparent = hasTransparency(marker);
-    material.depthWrite = !material.transparent;
-
+    const material = this._getPointsMaterial(marker.scale, hasTransparency(marker));
     const points = new THREE.Points(geometry, material);
     output.add(points);
   }
@@ -427,9 +451,11 @@ export class Markers extends THREE.Object3D {
 
       let material: THREE.MeshStandardMaterial | undefined;
       if (!marker.mesh_use_embedded_materials) {
-        material = new THREE.MeshStandardMaterial({ dithering: true });
-        setMaterialColor(material, marker.color);
+        material = this._getColorMaterial(marker.color);
       }
+
+      const edgesToAdd: [edges: THREE.LineSegments, parent: THREE.Object3D][] = [];
+      const lineMaterial = this._getOutlineMaterial();
 
       gltf.scene.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return;
@@ -438,22 +464,30 @@ export class Markers extends THREE.Object3D {
         child.castShadow = true;
         child.receiveShadow = true;
 
+        const edgesGeometry = new THREE.EdgesGeometry(child.geometry, 40);
+        const line = new THREE.LineSegments(edgesGeometry, lineMaterial);
+        edgesToAdd.push([line, child]);
+
         if (!marker.mesh_use_embedded_materials) {
           // Dispose of any allocated textures and the material and swap it with
           // our own material
           const meshChild = child as GltfMesh;
           if (Array.isArray(meshChild.material)) {
             for (const material of meshChild.material) {
-              disposeMaterial(material);
+              StandardColor.dispose(material);
             }
           } else {
-            disposeMaterial(meshChild.material);
+            StandardColor.dispose(meshChild.material);
           }
           meshChild.material = material!;
         }
       });
 
       output.add(gltf.scene);
+
+      for (const [line, parent] of edgesToAdd) {
+        parent.add(line);
+      }
     } catch (ex) {
       this.renderer.topicErrors.add(
         topic,
@@ -468,15 +502,6 @@ export class Markers extends THREE.Object3D {
 
 function getMarkerId(topic: string, ns: string, id: number): string {
   return `${topic}:${ns ? ns + ":" : ""}${id}`.replace(/\s/g, "_");
-}
-
-function setMaterialColor(output: Material, color: Readonly<ColorRGBA>): void {
-  const outputColor = output.color as THREE.Color;
-  outputColor.setRGB(color.r, color.g, color.b);
-  outputColor.convertSRGBToLinear();
-  output.opacity = color.a;
-  output.transparent = color.a < 1.0;
-  output.depthWrite = !output.transparent;
 }
 
 // This is a replacement for LineGeometry.setColors() that supports RGBA
@@ -563,19 +588,4 @@ function hasTransparency(marker: Marker): boolean {
     }
   }
   return marker.color.a < 1.0;
-}
-
-function disposeMaterial(material: MeshStandardMaterial): void {
-  material.map?.dispose();
-  material.lightMap?.dispose();
-  material.aoMap?.dispose();
-  material.emissiveMap?.dispose();
-  material.bumpMap?.dispose();
-  material.normalMap?.dispose();
-  material.displacementMap?.dispose();
-  material.roughnessMap?.dispose();
-  material.metalnessMap?.dispose();
-  material.alphaMap?.dispose();
-  material.envMap?.dispose();
-  material.dispose();
 }
