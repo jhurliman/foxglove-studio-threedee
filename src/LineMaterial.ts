@@ -565,11 +565,11 @@ class LineMaterial extends ShaderMaterial {
   //   this.uniforms.opacity!.value = value;
   // }
 
-  get resolution() {
+  get resolution(): THREE.Vector2 {
     return this.uniforms.resolution!.value;
   }
 
-  set resolution(value) {
+  set resolution(value: THREE.Vector2) {
     this.uniforms.resolution!.value.copy(value);
   }
 

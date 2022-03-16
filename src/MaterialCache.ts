@@ -143,6 +143,32 @@ export const PointsVertexColor = {
   },
 };
 
+export const LineVertexColorPrepass = {
+  id: (lineWidth: number, transparent: boolean): string =>
+    `LineVertexColor-${lineWidth}-${transparent ? "-t" : ""}-prepass`,
+
+  create: (lineWidth: number, transparent: boolean, resolution: THREE.Vector2): LineMaterial => {
+    const material = new LineMaterial({
+      worldUnits: true,
+      resolution,
+      colorWrite: false,
+
+      stencilWrite: true,
+      stencilRef: 1,
+      stencilZPass: THREE.ReplaceStencilOp,
+    });
+    material.name = LineVertexColorPrepass.id(lineWidth, transparent);
+    material.lineWidth = lineWidth;
+    material.transparent = transparent;
+    material.depthWrite = !transparent;
+    return material;
+  },
+
+  dispose: (material: LineMaterial): void => {
+    material.dispose();
+  },
+};
+
 export const LineVertexColor = {
   id: (lineWidth: number, transparent: boolean): string =>
     `LineVertexColor-${lineWidth}-${transparent ? "-t" : ""}`,
@@ -152,6 +178,12 @@ export const LineVertexColor = {
       worldUnits: true,
       vertexColors: true,
       resolution,
+
+      stencilWrite: true,
+      stencilRef: 0,
+      stencilFunc: THREE.NotEqualStencilFunc,
+      stencilFail: THREE.ReplaceStencilOp,
+      stencilZPass: THREE.ReplaceStencilOp,
     });
     material.name = LineVertexColor.id(lineWidth, transparent);
     material.lineWidth = lineWidth;

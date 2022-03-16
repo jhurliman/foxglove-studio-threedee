@@ -8,6 +8,7 @@ import { LineMaterial } from "../LineMaterial";
 import {
   LineBasicColor,
   LineVertexColor,
+  LineVertexColorPrepass,
   PointsVertexColor,
   StandardColor,
 } from "../MaterialCache";
@@ -133,6 +134,14 @@ export class Markers extends THREE.Object3D {
         srcTime,
       );
 
+      // Set resolution uniform on all LineMaterials
+      renderable.traverse((obj) => {
+        const maybeMesh = obj as Partial<THREE.Mesh>;
+        if (maybeMesh.material instanceof LineMaterial) {
+          maybeMesh.material.resolution.copy(this.renderer.input.canvasSize);
+        }
+      });
+
       if (marker.text) {
         // FIXME: Track shown labels to avoid duplicate emits and to emit removeLabel
         const topic = renderable.userData.topic!;
@@ -223,6 +232,18 @@ export class Markers extends THREE.Object3D {
     );
   }
 
+  private _getLineMaterialPrepass(
+    lineWidth: number,
+    transparent: boolean,
+    resolution: THREE.Vector2,
+  ): LineMaterial {
+    return this.renderer.materialCache.acquire(
+      LineVertexColorPrepass.id(lineWidth, transparent),
+      () => LineVertexColorPrepass.create(lineWidth, transparent, resolution),
+      LineVertexColorPrepass.dispose,
+    );
+  }
+
   private _getLineMaterial(
     lineWidth: number,
     transparent: boolean,
@@ -299,10 +320,22 @@ export class Markers extends THREE.Object3D {
     geometry.setPositions(linePositions);
     setColorsFromLineStrip(geometry, marker);
 
+    const lineWidth = marker.scale.x;
     const resolution = this.renderer.input.canvasSize;
-    const material = this._getLineMaterial(marker.scale.x, hasTransparency(marker), resolution);
-    const line = new Line2(geometry, material);
+    const transparent = hasTransparency(marker);
+
+    // Stencil and depth pass 1
+    const matLinePrepass = this._getLineMaterialPrepass(lineWidth, transparent, resolution);
+    const linePrepass = new Line2(geometry, matLinePrepass);
+    linePrepass.computeLineDistances();
+    linePrepass.renderOrder = 1;
+    output.add(linePrepass);
+
+    // Color pass 2
+    const matLine = this._getLineMaterial(lineWidth, transparent, resolution);
+    const line = new Line2(geometry, matLine);
     line.computeLineDistances();
+    line.renderOrder = 2;
     output.add(line);
   }
 
@@ -335,10 +368,22 @@ export class Markers extends THREE.Object3D {
     geometry.setPositions(linePositions);
     setColorsFromLineList(geometry, marker);
 
+    const lineWidth = marker.scale.x;
     const resolution = this.renderer.input.canvasSize;
-    const material = this._getLineMaterial(marker.scale.x, hasTransparency(marker), resolution);
-    const line = new LineSegments2(geometry, material);
+    const transparent = hasTransparency(marker);
+
+    // Stencil and depth pass 1
+    const matLinePrepass = this._getLineMaterialPrepass(lineWidth, transparent, resolution);
+    const linePrepass = new LineSegments2(geometry, matLinePrepass);
+    linePrepass.computeLineDistances();
+    linePrepass.renderOrder = 1;
+    output.add(linePrepass);
+
+    // Color pass 2
+    const matLine = this._getLineMaterial(lineWidth, transparent, resolution);
+    const line = new LineSegments2(geometry, matLine);
     line.computeLineDistances();
+    line.renderOrder = 2;
     output.add(line);
   }
 

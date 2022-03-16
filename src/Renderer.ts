@@ -69,6 +69,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
       throw new Error("WebGL2 is not supported");
     }
     this.gl.outputEncoding = THREE.sRGBEncoding;
+    this.gl.toneMapping = THREE.NoToneMapping;
     this.gl.autoClear = false;
     this.gl.info.autoReset = false;
     this.gl.shadowMap.enabled = true;
@@ -82,9 +83,6 @@ export class Renderer extends EventEmitter<RendererEvents> {
       height = canvas.parentElement.clientHeight;
       this.gl.setSize(width, height);
     }
-    this.gl.toneMapping = THREE.NoToneMapping;
-    this.gl.outputEncoding = THREE.sRGBEncoding;
-    this.gl.autoClear = false;
 
     this.gltfLoader = new GLTFLoader();
 
