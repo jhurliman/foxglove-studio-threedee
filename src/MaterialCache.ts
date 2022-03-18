@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { clamp } from "three/src/math/MathUtils";
+import { rgbaToHexString } from "./color";
 import { LineMaterial } from "./LineMaterial";
 import { ColorRGBA } from "./ros";
 
@@ -13,6 +13,7 @@ type MaterialCacheEntry = {
 
 export class MaterialCache {
   materials = new Map<string, MaterialCacheEntry>();
+  outlineMaterial = new THREE.LineBasicMaterial({ dithering: true });
 
   acquire<TMaterial extends THREE.Material>(
     id: string,
@@ -38,10 +39,19 @@ export class MaterialCache {
     }
     return entry.refCount;
   }
+
+  update(resolution: THREE.Vector2): void {
+    for (const entry of this.materials.values()) {
+      // Update the render resolution uniform on all LineMaterials
+      if (entry.material instanceof LineMaterial) {
+        entry.material.resolution = resolution;
+      }
+    }
+  }
 }
 
 export const BasicColor = {
-  id: (color: ColorRGBA): string => "BasicColor-" + colorToHexString(color),
+  id: (color: ColorRGBA): string => "BasicColor-" + rgbaToHexString(color),
 
   create: (color: ColorRGBA): THREE.MeshBasicMaterial => {
     const material = new THREE.MeshBasicMaterial({
@@ -67,7 +77,7 @@ export const BasicColor = {
 };
 
 export const StandardColor = {
-  id: (color: ColorRGBA): string => "StandardColor-" + colorToHexString(color),
+  id: (color: ColorRGBA): string => "StandardColor-" + rgbaToHexString(color),
 
   create: (color: ColorRGBA): THREE.MeshStandardMaterial => {
     const material = new THREE.MeshStandardMaterial({
@@ -83,24 +93,30 @@ export const StandardColor = {
     return material;
   },
 
-  dispose: (material: THREE.MeshStandardMaterial): void => {
-    material.map?.dispose();
-    material.lightMap?.dispose();
-    material.aoMap?.dispose();
-    material.emissiveMap?.dispose();
-    material.bumpMap?.dispose();
-    material.normalMap?.dispose();
-    material.displacementMap?.dispose();
-    material.roughnessMap?.dispose();
-    material.metalnessMap?.dispose();
-    material.alphaMap?.dispose();
-    material.envMap?.dispose();
-    material.dispose();
+  dispose: disposeStandardMaterial,
+};
+
+export const StandardInstancedColor = {
+  id: (transparent: boolean): string => "StandardInstancedColor" + (transparent ? "-t" : ""),
+
+  create: (transparent: boolean): THREE.MeshStandardMaterial => {
+    const material = new THREE.MeshStandardMaterial({
+      metalness: 0,
+      roughness: 1,
+      dithering: true,
+    });
+    material.name = StandardInstancedColor.id(transparent);
+    material.opacity = 1;
+    material.transparent = transparent;
+    material.depthWrite = !material.transparent;
+    return material;
   },
+
+  dispose: disposeStandardMaterial,
 };
 
 export const LineBasicColor = {
-  id: (color: ColorRGBA): string => "LineBaicColor-" + colorToHexString(color),
+  id: (color: ColorRGBA): string => "LineBasicColor-" + rgbaToHexString(color),
 
   create: (color: ColorRGBA): THREE.LineBasicMaterial => {
     const material = new THREE.LineBasicMaterial({
@@ -145,12 +161,11 @@ export const PointsVertexColor = {
 
 export const LineVertexColorPrepass = {
   id: (lineWidth: number, transparent: boolean): string =>
-    `LineVertexColor-${lineWidth}-${transparent ? "-t" : ""}-prepass`,
+    `LineVertexColorPrepass-${lineWidth.toFixed(4)}-${transparent ? "-t" : ""}`,
 
-  create: (lineWidth: number, transparent: boolean, resolution: THREE.Vector2): LineMaterial => {
+  create: (lineWidth: number, transparent: boolean): LineMaterial => {
     const material = new LineMaterial({
       worldUnits: true,
-      resolution,
       colorWrite: false,
 
       stencilWrite: true,
@@ -171,13 +186,12 @@ export const LineVertexColorPrepass = {
 
 export const LineVertexColor = {
   id: (lineWidth: number, transparent: boolean): string =>
-    `LineVertexColor-${lineWidth}-${transparent ? "-t" : ""}`,
+    `LineVertexColor-${lineWidth.toFixed(4)}-${transparent ? "-t" : ""}`,
 
-  create: (lineWidth: number, transparent: boolean, resolution: THREE.Vector2): LineMaterial => {
+  create: (lineWidth: number, transparent: boolean): LineMaterial => {
     const material = new LineMaterial({
       worldUnits: true,
       vertexColors: true,
-      resolution,
 
       stencilWrite: true,
       stencilRef: 0,
@@ -197,11 +211,17 @@ export const LineVertexColor = {
   },
 };
 
-function colorToHexString(color: ColorRGBA): string {
-  const rgba =
-    (clamp(color.r * 255, 0, 255) << 24) ^
-    (clamp(color.g * 255, 0, 255) << 16) ^
-    (clamp(color.b * 255, 0, 255) << 8) ^
-    (clamp(color.a * 255, 0, 255) << 0);
-  return ("00000000" + rgba.toString(16)).slice(-8);
+function disposeStandardMaterial(material: THREE.MeshStandardMaterial): void {
+  material.map?.dispose();
+  material.lightMap?.dispose();
+  material.aoMap?.dispose();
+  material.emissiveMap?.dispose();
+  material.bumpMap?.dispose();
+  material.normalMap?.dispose();
+  material.displacementMap?.dispose();
+  material.roughnessMap?.dispose();
+  material.metalnessMap?.dispose();
+  material.alphaMap?.dispose();
+  material.envMap?.dispose();
+  material.dispose();
 }

@@ -98,6 +98,10 @@ addRosDataType(MARKER_DATATYPES, "visualization_msgs/Marker");
 export const MARKER_ARRAY_DATATYPES = new Set<string>();
 addRosDataType(MARKER_ARRAY_DATATYPES, "visualization_msgs/MarkerArray");
 
+export function rosTimeToNanoSec(rosTime: { sec: number; nsec: number }): bigint {
+  return BigInt(rosTime.sec) * BigInt(1e9) + BigInt(rosTime.nsec);
+}
+
 // Expand a single ROS1 dataType into variations for ROS2 and protobufs,
 // then add them to the given output set
 function addRosDataType(output: Set<string>, dataType: string): Set<string> {

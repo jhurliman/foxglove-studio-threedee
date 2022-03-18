@@ -17,8 +17,8 @@ import {
   MARKER_ARRAY_DATATYPES,
   TF,
   Marker,
+  rosTimeToNanoSec,
 } from "./ros";
-import { rosTimeToNanoSec } from "./transforms/time";
 import { setOverlayPosition } from "./LabelOverlay";
 
 const SHOW_STATS = true;
@@ -129,7 +129,8 @@ function RendererOverlay(props: { colorScheme: "dark" | "light" | undefined }): 
 
 export function ThreeDeePanel({ context }: { context: PanelExtensionContext }): JSX.Element {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
-  const renderer = useMemo(() => (canvas ? new Renderer(canvas) : null), [canvas]);
+  const [renderer, setRenderer] = useState<Renderer | null>(null);
+  useEffect(() => setRenderer(canvas ? new Renderer(canvas) : null), [canvas]);
 
   const [colorScheme, setColorScheme] = useState<"dark" | "light" | undefined>();
   const [topics, setTopics] = useState<ReadonlyArray<Topic> | undefined>();

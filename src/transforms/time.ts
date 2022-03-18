@@ -5,10 +5,6 @@ export function compareTime(a: Time, b: Time): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-export function rosTimeToNanoSec(rosTime: { sec: number; nsec: number }): Time {
-  return BigInt(rosTime.sec) * BigInt(1e9) + BigInt(rosTime.nsec);
-}
-
 export function toSec(time: Time): number {
   const sec = Math.trunc(Number(time / BigInt(1e9)));
   const nsec = Number(time % BigInt(1e9));

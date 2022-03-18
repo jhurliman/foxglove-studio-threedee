@@ -36,7 +36,7 @@ export const BasicRender: ComponentStory<typeof ThreeDeePanel> = () => {
           },
           child_frame_id: "sensor_link",
           transform: {
-            translation: { x: 0, y: 0, z: 0 },
+            translation: { x: 0, y: 0, z: 1.1 },
             rotation: { x: 0, y: 0, z: 0, w: 1 },
           },
         },
@@ -134,8 +134,15 @@ export const BasicRender: ComponentStory<typeof ThreeDeePanel> = () => {
     ];
     marker6.scale.x = 0.05;
 
+    const marker7 = createMarker();
+    marker7.id = 7;
+    marker7.type = MarkerType.ARROW;
+    marker7.pose.position.y = 0.6;
+    marker7.scale = { x: 1, y: 0.1, z: 0.1 };
+    marker7.color = { r: 243 / 255, g: 175 / 255, b: 86 / 255, a: 1 };
+
     const markers: { markers: Marker[] } = {
-      markers: [marker0, marker1, marker2, marker3, marker4, marker5, marker6],
+      markers: [marker0, marker1, marker2, marker3, marker4, marker5, marker6, marker7],
     };
     const renderState: RenderState = {
       topics: [

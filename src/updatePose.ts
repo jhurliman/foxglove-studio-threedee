@@ -11,7 +11,8 @@ export function updatePose(
   dstTime: bigint,
   srcTime: bigint,
 ): void {
-  const pose = renderable.userData.pose as Pose;
+  const pose = renderable.userData.pose as Pose | undefined;
+  if (!pose) throw new Error(`Missing userData.pose for ${renderable.name}`);
   const poseApplied = Boolean(
     transformTree.apply(tempPose, pose, renderFrameId, fixedFrameId, srcFrameId, dstTime, srcTime),
   );

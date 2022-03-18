@@ -12,6 +12,13 @@ import { FrameAxes } from "./renderables/FrameAxes";
 import "./webgl-memory";
 import { TopicErrors } from "./TopicErrors";
 import { MaterialCache } from "./MaterialCache";
+import { ModelCache } from "./ModelCache";
+
+export enum DetailLevel {
+  Low,
+  Medium,
+  High,
+}
 
 export type RendererEvents = {
   startFrame: (currentTime: bigint, renderer: Renderer) => void;
@@ -32,9 +39,12 @@ type MemoryInfo = {
 const LIGHT_BACKDROP = new THREE.Color(0xececec);
 const DARK_BACKDROP = new THREE.Color(0x121217);
 
+const tempVec = new THREE.Vector3();
+
 export class Renderer extends EventEmitter<RendererEvents> {
   canvas: HTMLCanvasElement;
   gl: THREE.WebGLRenderer;
+  lod = DetailLevel.High;
   scene: THREE.Scene;
   dirLight: THREE.DirectionalLight;
   input: Input;
@@ -43,7 +53,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
   materialCache = new MaterialCache();
   topicErrors = new TopicErrors();
   colorScheme: "dark" | "light" | undefined;
-  gltfLoader: GLTFLoader;
+  modelCache: ModelCache;
+  renderables = new Map<string, THREE.Object3D>();
   transformTree = new TransformTree();
   currentTime: bigint | undefined;
   fixedFrameId: string | undefined;
@@ -84,7 +95,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
       this.gl.setSize(width, height);
     }
 
-    this.gltfLoader = new GLTFLoader();
+    console.info(`[Renderer] Initialized ${width}x${height} renderer`);
+
+    this.modelCache = new ModelCache({ ignoreColladaUpAxis: true });
 
     this.scene = new THREE.Scene();
     this.scene.add(this.frameAxes);
@@ -123,6 +136,13 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.animationFrame(performance.now());
   }
 
+  dispose(): void {
+    this.frameAxes.dispose();
+    this.markers.dispose();
+    this.gl.dispose();
+    this.gl.forceContextLoss();
+  }
+
   setColorScheme(colorScheme: "dark" | "light"): void {
     console.info(`[Renderer] Setting color scheme to "${colorScheme}"`);
     this.colorScheme = colorScheme;
@@ -137,12 +157,13 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.markers.addMarkerMessage(topic, marker);
   }
 
-  removeMarkerMessage(topic: string, ns: string, id: number): void {
-    this.markers.removeMarkerMessage(topic, ns, id);
-  }
-
   markerWorldPosition(markerId: string): Readonly<THREE.Vector3> | undefined {
-    return this.markers.markerWorldPosition(markerId);
+    const renderable = this.renderables.get(markerId);
+    if (!renderable) return undefined;
+
+    tempVec.set(0, 0, 0);
+    tempVec.applyMatrix4(renderable.matrixWorld);
+    return tempVec;
   }
 
   printMemoryStats(): void {
@@ -151,12 +172,16 @@ export class Renderer extends EventEmitter<RendererEvents> {
       | undefined;
     if (ext) {
       const info = ext.getMemoryInfo();
+      const memory: string[] = [];
+      const resources: string[] = [];
       for (const [key, value] of Object.entries(info.memory)) {
-        console.info(`[Renderer][Memory] ${key}: ${byteString(value)}`);
+        memory.push(`${key}: ${byteString(value)}`);
       }
       for (const [key, value] of Object.entries(info.resources)) {
-        console.info(`[Renderer][Resources] ${key}: ${value}`);
+        resources.push(`${key}: ${value}`);
       }
+      console.info(`[Renderer][Memory] ${memory.join(", ")}`);
+      console.info(`[Renderer][Resources] ${resources.join(", ")}`);
     }
   }
 
@@ -175,8 +200,10 @@ export class Renderer extends EventEmitter<RendererEvents> {
     this.controls.update();
 
     // TODO: Remove this hack when the user can set the renderFrameId themselves
-    this.fixedFrameId = this.transformTree.frames().keys().next().value as string | undefined;
-    this.renderFrameId = this.fixedFrameId;
+    this.fixedFrameId = "base_link";
+    this.renderFrameId = "base_link";
+
+    this.materialCache.update(this.input.canvasSize);
 
     this.frameAxes.startFrame(currentTime);
     this.markers.startFrame(currentTime);

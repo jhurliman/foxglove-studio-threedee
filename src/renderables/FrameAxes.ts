@@ -1,8 +1,7 @@
 import * as THREE from "three";
 import { Renderer } from "../Renderer";
-import { Pose, TF } from "../ros";
+import { Pose, rosTimeToNanoSec, TF } from "../ros";
 import { makePose, Transform } from "../transforms";
-import { rosTimeToNanoSec } from "../transforms/time";
 import { updatePose } from "../updatePose";
 
 type FrameAxisRenderable = THREE.Object3D & {
@@ -21,6 +20,18 @@ export class FrameAxes extends THREE.Object3D {
   constructor(renderer: Renderer) {
     super();
     this.renderer = renderer;
+  }
+
+  dispose(): void {
+    for (const renderable of this.renderables.values()) {
+      renderable.traverse((obj) => {
+        if (obj instanceof THREE.AxesHelper) {
+          obj.dispose();
+        }
+      });
+    }
+    this.children.length = 0;
+    this.renderables.clear();
   }
 
   addTransformMessage(tf: TF): void {
